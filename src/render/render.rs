@@ -20,9 +20,9 @@ pub type DepthFormat = gfx::format::DepthStencil;
 
 use super::pipelines::TerrainVertex;
 const TRIANGLE: [TerrainVertex; 3] = [
-    TerrainVertex { pos: [ -0.5, -0.5 ], color: [1.0, 0.0, 0.0] },
-    TerrainVertex { pos: [  0.5, -0.5 ], color: [0.0, 1.0, 0.0] },
-    TerrainVertex { pos: [  0.0,  0.5 ], color: [0.0, 0.0, 1.0] }
+    TerrainVertex { pos: [ -0.5, -0.5, 0.0 ], uv: [0.0, 1.0] },
+    TerrainVertex { pos: [  0.5, -0.5, 0.0 ], uv: [1.0, 1.0] },
+    TerrainVertex { pos: [  0.0,  0.5, 0.0 ], uv: [0.5, 0.0] }
 ];
 
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
@@ -52,7 +52,7 @@ impl Render{
         let join_handle=thread::Builder::new().name("Render".to_string()).spawn(move|| {
             let mut render=match Self::setup() {
                 Ok(render) => render,
-                Err(e) => {panic!("aaa");}
+                Err(e) => {panic!("{}",e);}
             };
 
             match render.lifecycle() {
@@ -101,9 +101,85 @@ impl Render{
         //use ::pipe;
         use gfx::traits::FactoryExt;
         let (vertex_buffer, slice) = self.storage.gfx_factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
+        /*
         let mut data = super::pipelines::TerrainPipeline::Data {
             vbuf: vertex_buffer,
             out: self.render_target.clone()
+        };
+        */
+
+        use cgmath::{Vector2, Matrix4, SquareMatrix, Array};
+
+        use gfx::handle::{ShaderResourceView};
+
+        fn load_texture_raw<R, F>(factory: &mut F) -> ShaderResourceView<R, [f32; 4]>
+            where R: gfx::Resources, F: gfx::Factory<R>
+        {
+            use gfx::texture;
+
+            const data: [[u8; 4]; 4] = [
+                [ 0xFF, 0x00, 0x00, 0xFF ], [ 0x00, 0xFF, 0x00, 0xFF ],
+                [ 0x00, 0x00, 0xFF, 0xFF ], [ 0xFF, 0xFF, 0xFF, 0xFF ],
+            ];
+
+            //let kind = texture::Kind::D2(2 as texture::Size, 2 as texture::Size, texture::AaMode::Single);
+            let (_, view) = factory.create_texture_immutable::<ColorFormat>(
+                texture::Kind::D2(2, 2, texture::AaMode::Single),
+                //texture::Mipmap::Provided,
+                &[&data]
+            ).unwrap();
+            //let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[data]).unwrap();
+            view
+        }
+
+        fn load_texture<R, F>(factory: &mut F) -> ShaderResourceView<R, [f32; 4]>
+            where R: gfx::Resources, F: gfx::Factory<R>
+        {
+            use std::fs::{File};
+            use std::io::{Read};
+            use std::io::{Cursor};
+            use image;
+            use gfx::texture;
+
+            let mut buf = Vec::new();
+            let fullpath = "img.png";//&Path::new("img.png");//.join(&path);
+            let mut file = match File::open(&fullpath) {
+                Ok(file) => file,
+                Err(err) => {
+                    panic!("Can`t open file '{}' ({})", fullpath, err);
+                },
+            };
+            let cursor=match file.read_to_end(&mut buf) {
+                Ok(_) => Cursor::new(buf),
+                Err(err) => {
+                    panic!("Can`t read file '{}' ({})", fullpath, err);
+                },
+            };
+
+            let img = image::load(cursor, image::PNG).unwrap().to_rgba();
+            let (w, h) = img.dimensions();
+            let data=&img.into_vec();
+
+            let (_, view) = factory.create_texture_immutable_u8::<ColorFormat>(
+                texture::Kind::D2(w as texture::Size, h as texture::Size, texture::AaMode::Single),
+                //texture::Mipmap::Provided,
+                &[&data[..]]
+            ).unwrap();
+            //let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[data]).unwrap();
+            view
+        }
+
+        let sampler = self.storage.gfx_factory.create_sampler_linear();
+        let fake_texture = load_texture_raw(&mut self.storage.gfx_factory);
+        let tex=load_texture(&mut self.storage.gfx_factory);
+
+        let data = super::pipelines::TerrainPipeline::Data {
+            basic_color: [1.0, 1.0, 1.0, 1.0],
+            final_matrix: Matrix4::identity().into(),
+            vbuf: vertex_buffer,
+            texture: (tex, sampler),
+            out: self.render_target.clone(),
+            out_depth: self.depth_stencil.clone()
         };
 
         let mut running = true;
