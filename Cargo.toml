@@ -1,0 +1,13 @@
+[package]
+name = "prog_tech"
+version = "0.1.0"
+authors = ["trionprog <trionprog@gmail.com>"]
+
+[dependencies]
+nes = { path = "../nes" }
+gfx_core = "0.7.2"
+gfx_device_gl = "0.14.5"
+gfx_window_glutin = "0.18.0"
+gfx = "0.16.0"
+glutin = "0.10"
+cgmath = "*"
