@@ -17,6 +17,8 @@ define_error!( Error,
         "Compile shader error:{1}",
     CreatePSOError(pso_error:Box<String>) =>
         "Create PSO error:{1}",
+    CreateTextureError(texture_error:Box<gfx::CombinedError>) =>
+        "Create Texture Error: {1}",
     Other(message:String) =>
         "{}"
 );

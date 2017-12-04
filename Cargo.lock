@@ -10,6 +10,7 @@ dependencies = [
  "glutin 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "nes 0.1.1",
+ "object_pool 0.1.0",
 ]
 
 [[package]]
@@ -523,6 +524,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "malloc_buf 0.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
+
+[[package]]
+name = "object_pool"
+version = "0.1.0"
 
 [[package]]
 name = "osmesa-sys"

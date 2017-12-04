@@ -12,3 +12,4 @@ gfx = "0.16.0"
 glutin = "0.10"
 cgmath = "*"
 image = "0.18.0"
+object_pool = { path = "../object_pool" }

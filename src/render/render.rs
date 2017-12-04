@@ -11,9 +11,17 @@ use glutin::GlContext;
 use std::thread;
 use std::thread::JoinHandle;
 
+use process;
+use process::ProcessSender;
+use process::ProcessCommand;
+
 use super::Error;
 use super::Window;
 use super::Storage;
+use super::RenderCommand;
+
+pub type RenderSender = std::sync::mpsc::Sender<RenderCommand>;
+pub type RenderReceiver = std::sync::mpsc::Receiver<RenderCommand>;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -29,6 +37,9 @@ const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 
 pub struct Render {
+    render_receiver:RenderReceiver,
+    process_sender:ProcessSender,
+
     window: Window,
     events_loop:glutin::EventsLoop,
     render_target:gfx::handle::RenderTargetView<gfx_gl::Resources, ColorFormat>,
@@ -46,13 +57,24 @@ pub struct Render {
 }
 
 impl Render{
-    pub fn run()-> JoinHandle<()> {
-        //let (render_sender, render_receiver) = std::sync::mpsc::channel();
+    pub fn run()-> (JoinHandle<()>, RenderSender) {
+        let (render_sender, render_receiver) = std::sync::mpsc::channel();
 
         let join_handle=thread::Builder::new().name("Render".to_string()).spawn(move|| {
-            let mut render=match Self::setup() {
+            let process_sender = match render_receiver.recv() {
+                Ok( RenderCommand::ProcessSender(process_sender) ) => process_sender,
+                _ => recv_error!(RenderCommand::ProcessSender),
+            };
+
+            let mut render=match Self::setup(render_receiver, process_sender.clone()) {
                 Ok(render) => render,
-                Err(e) => {panic!("{}",e);}
+                Err(e) => {
+                    //error!("Render setup error: {}", error);
+
+                    try_send![process_sender, ProcessCommand::RenderSetupError];
+
+                    return;
+                }
             };
 
             match render.lifecycle() {
@@ -64,10 +86,10 @@ impl Render{
             }
         }).unwrap();
 
-        join_handle
+        (join_handle, render_sender)
     }
 
-    fn setup() -> Result<Self,Error> {
+    fn setup(render_receiver:RenderReceiver, process_sender:ProcessSender) -> Result<Self,Error> {
         let mut events_loop = glutin::EventsLoop::new();
 
         let window_config = glutin::WindowBuilder::new()
@@ -84,6 +106,9 @@ impl Render{
         let mut storage=Storage::new(gfx_factory)?;
 
         let render=Render {
+            render_receiver,
+            process_sender,
+
             window,
             events_loop,
             render_target,
