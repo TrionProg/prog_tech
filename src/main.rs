@@ -28,8 +28,8 @@ pub use process::Process;
 //use process::Process;
 
 pub fn main() {
-    let (render_join_handler, render_sender)=Render::run();
-    let process_join_handler=Process::run(render_sender);
+    let (render_join_handler, render_sender, storage_sender)=Render::run();
+    let process_join_handler=Process::run(render_sender, storage_sender);
 
     render_join_handler.join();
     process_join_handler.join();

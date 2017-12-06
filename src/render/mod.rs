@@ -3,10 +3,15 @@ pub mod error;
 pub use self::error::Error;
 
 pub mod render;
-pub use self::render::{Render, RenderSender, RenderReceiver};
+pub use self::render::{Render, RenderSender, StorageSender};
+pub use self::render::{RenderTarget,DepthStencil};
 
 pub mod commands;
 pub use self::commands::RenderCommand;
+pub use self::commands::{StorageCommand, LoadTexture, LoadMesh, LoadLod};
+
+pub mod scheduler;
+pub use self::scheduler::Scheduler;
 
 pub mod screen;
 

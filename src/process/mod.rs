@@ -1,7 +1,7 @@
 
 
 pub mod process;
-pub use self::process::{Process, ProcessSender, ProcessReceiver};
+pub use self::process::{Process, ProcessSender};
 
 pub mod commands;
 pub use self::commands::ProcessCommand;

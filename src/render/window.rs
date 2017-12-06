@@ -4,6 +4,7 @@ use glutin;
 use glutin::GlContext;
 
 use super::Error;
+use super::{RenderTarget, DepthStencil};
 
 pub struct Window {
     window: glutin::GlWindow,
@@ -25,7 +26,7 @@ impl Window {
         ok!()
     }
 
-    pub fn resize(&mut self, width:u32, height:u32) {
+    pub fn resize(&mut self, width:u32, height:u32, render_target:&mut RenderTarget, depth_stencil:&mut DepthStencil) {
         self.window.resize(width,height);
         self.width=width;
         self.height=height;

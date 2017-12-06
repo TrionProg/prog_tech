@@ -13,13 +13,21 @@ use gfx::texture::AaMode;
 
 use render::Error;
 
-pub struct RgbTexture {
-    texture:gfx::handle::Texture<gfx_gl::Resources, gfx::format::R8_G8_B8_A8>,
-    view:gfx::handle::ShaderResourceView<gfx_gl::Resources, [f32; 4]>
+pub trait Texture:Sized {
+    type IB;
+
+    fn new(image_buffer:Self::IB, gfx_factory: &mut gfx_gl::Factory) -> Result<Self,Error>;
 }
 
-impl RgbTexture {
-    pub fn new(image_buffer:RgbImage, gfx_factory: &mut gfx_gl::Factory) -> Result<Self,Error> {
+pub struct RgbTexture {
+    texture:gfx::handle::Texture<gfx_gl::Resources, gfx::format::R8_G8_B8_A8>,
+    pub view:gfx::handle::ShaderResourceView<gfx_gl::Resources, [f32; 4]>
+}
+
+impl Texture for RgbTexture {
+    type IB=RgbImage;
+
+    fn new(image_buffer:Self::IB, gfx_factory: &mut gfx_gl::Factory) -> Result<Self,Error> {
         let width=image_buffer.width() as Size;
         let height=image_buffer.height() as Size;
 
