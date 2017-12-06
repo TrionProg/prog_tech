@@ -41,7 +41,7 @@ pub struct Storage {
     pub object_pso: ObjectPSO,
     //pub fake_texture = u32;
 
-    pub textures_rgb:InnerTextureStorage<RgbTextureID, RgbImage, RgbTexture>,
+    pub textures_rgba:InnerTextureStorage<RgbaTextureID, RgbaImage, RgbaTexture>,
 
     pub object_meshes:InnerMeshStorage<ObjectMeshID,ObjectMesh>,
 
@@ -57,7 +57,7 @@ impl Storage {
             gfx_factory:gfx_factory.clone(),
             object_pso,
             //fake_texture
-            textures_rgb:InnerTextureStorage::new(&gfx_factory),
+            textures_rgba:InnerTextureStorage::new(&gfx_factory),
 
             object_meshes:InnerMeshStorage::new(),
 
@@ -173,13 +173,13 @@ impl<ID:LodID,V,L:Lod<V=V>> InnerLodStorage<ID,V,L> {
 }
 
 
-impl TextureStorage<RgbTextureID, RgbImage> for Storage {
-    fn load_texture(&mut self, image_buffer:RgbImage, texture_id:RgbTextureID) -> Result<(), Error> {
-        self.textures_rgb.load(image_buffer, texture_id)
+impl TextureStorage<RgbaTextureID, RgbaImage> for Storage {
+    fn load_texture(&mut self, image_buffer:RgbaImage, texture_id:RgbaTextureID) -> Result<(), Error> {
+        self.textures_rgba.load(image_buffer, texture_id)
     }
 
-    fn delete_texture(&mut self, texture_id:RgbTextureID) -> Result<(), Error> {
-        self.textures_rgb.delete(texture_id)
+    fn delete_texture(&mut self, texture_id:RgbaTextureID) -> Result<(), Error> {
+        self.textures_rgba.delete(texture_id)
     }
 }
 

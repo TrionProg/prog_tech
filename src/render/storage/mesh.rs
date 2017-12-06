@@ -11,11 +11,11 @@ pub trait Mesh {
 
 pub struct ObjectMesh {
     pub lod:ObjectLodID,
-    pub texture:RgbTextureID,
+    pub texture:RgbaTextureID,
 }
 
 impl ObjectMesh {
-    pub fn new(lod:ObjectLodID, texture:RgbTextureID) -> Self {
+    pub fn new(lod:ObjectLodID, texture:RgbaTextureID) -> Self {
         ObjectMesh {
             lod,
             texture

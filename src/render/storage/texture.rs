@@ -19,13 +19,13 @@ pub trait Texture:Sized {
     fn new(image_buffer:Self::IB, gfx_factory: &mut gfx_gl::Factory) -> Result<Self,Error>;
 }
 
-pub struct RgbTexture {
+pub struct RgbaTexture {
     texture:gfx::handle::Texture<gfx_gl::Resources, gfx::format::R8_G8_B8_A8>,
     pub view:gfx::handle::ShaderResourceView<gfx_gl::Resources, [f32; 4]>
 }
 
-impl Texture for RgbTexture {
-    type IB=RgbImage;
+impl Texture for RgbaTexture {
+    type IB=RgbaImage;
 
     fn new(image_buffer:Self::IB, gfx_factory: &mut gfx_gl::Factory) -> Result<Self,Error> {
         let width=image_buffer.width() as Size;
@@ -38,7 +38,7 @@ impl Texture for RgbTexture {
             &[&data[..]]
         ), Error::CreateTextureError);
 
-        let texture=RgbTexture {
+        let texture=RgbaTexture {
             texture,
             view
         };

@@ -7,7 +7,7 @@ pub use std::time::Duration;
 pub type TextureData=Vec<u8>;
 
 pub use image::{GrayImage, GrayAlphaImage, RgbImage, RgbaImage};
-pub use storage::{RgbTextureID, RgbaTextureID};
+pub use storage::{RgbaTextureID};
 pub use storage::{ObjectMeshID, ObjectLodID};
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]

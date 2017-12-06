@@ -307,7 +307,7 @@ impl Render{
             (mesh.lod, mesh.texture)
         };
 
-        let texture=self.storage.textures_rgb.get(texture_id)?;
+        let texture=self.storage.textures_rgba.get(texture_id)?;
         let lod=self.storage.object_lods.get(lod_id)?;
 
         let sampler = self.storage.gfx_factory.create_sampler_linear();
@@ -330,7 +330,7 @@ impl Render{
         use super::storage::TextureStorage;
 
         match load_texture {
-            LoadTexture::RGB(image_buffer, texture_id) =>
+            LoadTexture::RGBA(image_buffer, texture_id) =>
                 self.storage.load_texture(image_buffer, texture_id)
         }
     }

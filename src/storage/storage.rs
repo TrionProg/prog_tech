@@ -43,8 +43,8 @@ pub struct Storage {
 struct InnerStorage {
     storage_sender:StorageSender,
 
-    textures_rgb:InnerTextureStorage<RgbTextureID>,
-    //textures_rgba:InnerTextureStorage<RgbTextureID>,
+    textures_rgba:InnerTextureStorage<RgbaTextureID>,
+    //textures_rgbaa:InnerTextureStorage<RgbaTextureID>,
 
     object_meshes:InnerMeshStorage<ObjectMeshID>,
 
@@ -56,7 +56,7 @@ impl InnerStorage {
         InnerStorage {
             storage_sender,
 
-            textures_rgb:InnerTextureStorage::new(),
+            textures_rgba:InnerTextureStorage::new(),
 
             object_meshes:InnerMeshStorage::new(),
 
@@ -138,18 +138,18 @@ impl<ID:LodID> InnerLodStorage<ID> {
     }
 }
 
-impl TextureStorage<RgbTextureID, RgbImage> for Storage {
-    fn load_texture(&self, image_buffer:RgbImage) -> Result<RgbTextureID, Error> {
+impl TextureStorage<RgbaTextureID, RgbaImage> for Storage {
+    fn load_texture(&self, image_buffer:RgbaImage) -> Result<RgbaTextureID, Error> {
         mutex_lock!(&self.inner => storage, Error);
 
-        let texture_id=storage.textures_rgb.insert();
+        let texture_id=storage.textures_rgba.insert();
 
-        channel_send!(storage.storage_sender, LoadTexture::RGB(image_buffer, texture_id.clone()).into());
+        channel_send!(storage.storage_sender, LoadTexture::RGBA(image_buffer, texture_id.clone()).into());
 
         ok!(texture_id)
     }
 
-    fn delete_texture(&self, texture_id:RgbTextureID) -> Result<(), Error> {
+    fn delete_texture(&self, texture_id:RgbaTextureID) -> Result<(), Error> {
         mutex_lock!(&self.inner => storage, Error);
 
         ok!()
@@ -193,17 +193,17 @@ impl LodStorage<ObjectLodID, ObjectVertex> for Storage {
 }
 
 /*
-impl TextureStorage<RgbaTextureID, RgbaImage> for Storage {
-    fn load_texture(&self, image_buffer:RgbaImage) -> Result<RgbaTextureID, Error> {
+impl TextureStorage<RgbaaTextureID, RgbaaImage> for Storage {
+    fn load_texture(&self, image_buffer:RgbaaImage) -> Result<RgbaaTextureID, Error> {
         mutex_lock!(&self.inner => storage, Error);
 
-        let id=storage.textures_rgba.insert(());
-        let texture_id=RgbaTextureID::new(id);
+        let id=storage.textures_rgbaa.insert(());
+        let texture_id=RgbaaTextureID::new(id);
 
         ok!(texture_id)
     }
 
-    fn delete_texture(&self, texture_id:RgbaTextureID) -> Result<(), Error> {
+    fn delete_texture(&self, texture_id:RgbaaTextureID) -> Result<(), Error> {
         mutex_lock!(&self.inner => storage, Error);
 
         ok!()

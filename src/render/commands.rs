@@ -24,7 +24,7 @@ pub enum StorageCommand {
 }
 
 pub enum LoadTexture {
-    RGB(RgbImage, RgbTextureID),
+    RGBA(RgbaImage, RgbaTextureID),
 }
 
 impl Into<StorageCommand> for LoadTexture {

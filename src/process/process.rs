@@ -161,7 +161,7 @@ impl Process {
             },
         };
 
-        let image_buffer = image::load(cursor, image::PNG).unwrap().to_rgb();
+        let image_buffer = image::load(cursor, image::PNG).unwrap().to_rgba();
 
         let texture_id=self.storage.load_texture(image_buffer).unwrap();
         let mesh=ObjectMesh::new(

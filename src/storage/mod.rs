@@ -7,7 +7,7 @@ pub mod storage;
 pub use self::storage::{Storage, TextureStorage, MeshStorage, LodStorage};
 
 pub mod texture;
-pub use self::texture::{TextureID, RgbTextureID, RgbaTextureID};
+pub use self::texture::{TextureID, RgbaTextureID};
 
 pub mod mesh;
 pub use self::mesh::{MeshID, ObjectMeshID};
