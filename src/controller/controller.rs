@@ -1,15 +1,8 @@
 use std;
-use gfx;
-use gfx_gl;
-use gfx_glutin;
 use glutin;
 use nes::{ErrorInfo,ErrorInfoTrait};
-use reactor;
 
 use types::*;
-
-use gfx::Device;
-use glutin::GlContext;
 
 use std::thread;
 use std::thread::JoinHandle;
@@ -18,82 +11,62 @@ use process;
 use process::ProcessSender;
 use process::ProcessCommand;
 
+use process;
+use process::RenderSender;
+use process::RenderCommand;
+
 use super::Error;
-use super::Window;
-use super::Storage;
-use super::Scheduler;
-use super::RenderCommand;
-use super::{StorageCommand, LoadTexture, LoadMesh, LoadLod};
+use super::ControllerCommand;
 
-pub type RenderSender = reactor::Sender<ThreadSource,RenderCommand>;
-pub type RenderReceiver = reactor::Receiver<ThreadSource,RenderCommand>;
+pub type ControllerSender = std::sync::mpsc::Sender<ControllerCommand>;
+pub type ControllerReceiver = std::sync::mpsc::Receiver<ControllerCommand>;
 
-pub type StorageSender = reactor::Sender<ThreadSource,StorageCommand>;
-pub type StorageReceiver = reactor::Receiver<ThreadSource,StorageCommand>;
-
-pub type ColorFormat = gfx::format::Rgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
-
-pub type RenderTarget = gfx::handle::RenderTargetView<gfx_gl::Resources, ColorFormat>;
-pub type DepthStencil = gfx::handle::DepthStencilView<gfx_gl::Resources, DepthFormat>;
-
-const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
-
-
-pub struct Render {
-    render_receiver:RenderReceiver,
-    storage_receiver:StorageReceiver,
-    process_sender:ProcessSender,
-
-    window: Window,
+pub struct Controller {
     events_loop:glutin::EventsLoop,
-    render_target:RenderTarget,
-    depth_stencil:DepthStencil,
-
-
-    //clear_color: [f32; 4],
-    gfx_device: gfx_gl::Device,
-    encoder: gfx::Encoder<gfx_gl::Resources, gfx_gl::CommandBuffer>,
-    //pub pso: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
-    //pso_wire: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
-    storage: Storage,
-    //font: rusttype::Font<'static>,
-    //pub data: pipe::Data<gfx_gl::Resources>,
-    scheduler:Scheduler
 }
 
-impl Render{
-    pub fn run()-> (JoinHandle<()>, RenderSender, StorageSender) {
-        let (render_sender, mut render_receiver) = reactor::create_channel(ThreadSource::Render);
-        let (storage_sender, storage_receiver) = reactor::create_channel(ThreadSource::Render);
+impl Controller{
+    pub fn run()-> (JoinHandle<()>, ControllerSender) {
+        let (controller_sender, controller_receiver) = std::sync::mpsc::channel();
 
-        let join_handle=thread::Builder::new().name("Render".to_string()).spawn(move|| {
-            /*
-            let mut process_sender = Self::get_senders(&mut render_receiver).unwrap();
+        let join_handle=thread::Builder::new().name("Controller".to_string()).spawn(move|| {
+            let process_sender = match controller_receiver.recv() {
+                Ok( ControllerCommand::ProcessSender(process_sender) ) => process_sender,
+                _ => recv_error!(ControllerCommand::ProcessSender),
+            };
 
-            let mut render=match Self::setup(render_receiver, storage_receiver, process_sender.clone()) {
-                Ok(render) => render,
+            let render_sender = match controller_receiver.recv() {
+                Ok( ControllerCommand::RenderSender(render_sender) ) => render_sender,
+                _ => recv_error!(ControllerCommand::RenderSender),
+            };
+
+            let render_sender = match controller_receiver.recv() {
+                Ok( ControllerCommand::RenderSender(render_sender) ) => render_sender,
+                _ => recv_error!(ControllerCommand::RenderSender),
+            };
+
+            let mut controller=match Self::setup(controller_receiver, render_sender.clone(), process_sender.clone()) {
+                Ok(controller) => controller,
                 Err(error) => {
-                    println!("Render setup error: {}", error);
+                    println!("Controller setup error: {}", error);
 
-                    send![
-                        process_sender, ProcessCommand::RenderSetupError
-                    ].unwrap();
+                    try_send![process_sender, ProcessCommand::ControllerSetupError];
+                    try_send![render_sender, RenderCommand::ControllerSetupError];
 
                     return;
                 }
             };
 
-            render.synchronize_setup().unwrap();
+            controller.synchronize_setup();
 
             match render.lifecycle() {
                 Ok(_) => {
                     //do something
 
-                    render.synchronize_finish().unwrap();
+                    render.synchronize_finish();
                 }
                 Err(error) => {
-                    println!("Render Error: {}!", error);
+                    println!("Controller Error: {}!", error);
 
                     match error {
                         Error::ProcessThreadCrash(_,source) => {
@@ -104,28 +77,17 @@ impl Render{
                             */
                         }
                         _ => {
-                            send![
-                                render.process_sender , ProcessCommand::RenderThreadCrash(ThreadSource::Render)
-                            ].unwrap();
+                            try_send![render.process_sender, ProcessCommand::ControllerThreadCrash(ThreadSource::Controller)];
                         }
                     }
                 }
             }
-            */
         }).unwrap();
 
-        (join_handle, render_sender, storage_sender)
+        (join_handle, controller_sender, storage_sender)
     }
 
-    fn get_senders(render_receiver:&mut RenderReceiver) -> Result<(ProcessSender),Error> {
-        let process_sender=wait![render_receiver,
-            RenderCommand::ProcessSender(process_sender) => process_sender
-        ].unwrap();
-
-        ok!((process_sender))
-    }
-
-    fn setup(render_receiver:RenderReceiver, storage_receiver:StorageReceiver, process_sender:ProcessSender) -> Result<Self,Error> {
+    fn setup(controller_receiver:ControllerReceiver, storage_receiver:StorageReceiver, process_sender:ProcessSender) -> Result<Self,Error> {
         let mut events_loop = glutin::EventsLoop::new();
 
         let window_config = glutin::WindowBuilder::new()
@@ -134,7 +96,7 @@ impl Render{
         let context = glutin::ContextBuilder::new()
             .with_vsync(true);
 
-        let (gfx_window, gfx_device,mut gfx_factory, render_target, depth_stencil) =
+        let (gfx_window, gfx_device,mut gfx_factory, controller_target, depth_stencil) =
             gfx_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop);
 
         let window=Window::new(gfx_window, 1024, 768);
@@ -143,14 +105,14 @@ impl Render{
 
         let scheduler=Scheduler::new(50);
 
-        let render=Render {
-            render_receiver,
+        let render=Controller {
+            controller_receiver,
             storage_receiver,
             process_sender,
 
             window,
             events_loop,
-            render_target,
+            controller_target,
             depth_stencil,
 
             gfx_device,
@@ -162,14 +124,13 @@ impl Render{
         ok!(render)
     }
 
-    fn synchronize_setup(&mut self) -> Result<(),Error>{
-        try_send![self.process_sender, ProcessCommand::RenderIsReady];
+    fn synchronize_setup(&mut self) {
+        try_send![self.process_sender, ProcessCommand::ControllerIsReady];
 
-        wait![self.render_receiver,
-            RenderCommand::ProcessIsReady => ()
-        ].unwrap();
-
-        ok!()
+        match self.controller_receiver.recv() {
+            Ok( ControllerCommand::ProcessIsReady ) => {},
+            _ => recv_error!(ControllerCommand::ProcessIsReady),
+        }
     }
 
     fn lifecycle(&mut self) -> Result<(),Error> {
@@ -182,7 +143,7 @@ impl Render{
 
             self.poll_window_events()?;
 
-            if self.handle_render_commands()? {
+            if self.handle_controller_commands()? {
                 return ok!();
             }
 
@@ -203,7 +164,7 @@ impl Render{
         let mut quit=false;
 
         let window=&mut self.window;
-        let render_target=&mut self.render_target;
+        let controller_target=&mut self.controller_target;
         let depth_stencil=&mut self.depth_stencil;
 
         self.events_loop.poll_events(|event| {
@@ -216,15 +177,14 @@ impl Render{
                         ..
                     } | glutin::WindowEvent::Closed => quit=true,
                     glutin::WindowEvent::Resized(width, height) =>
-                        window.resize(width, height, render_target, depth_stencil),
+                        window.resize(width, height, controller_target, depth_stencil),
                     _ => {},
                 }
             }
         });
 
         if quit {
-            try_send![self.process_sender, ProcessCommand::Quit];
-            //channel_send!(self.process_sender, ProcessCommand::Quit);
+            channel_send!(self.process_sender, ProcessCommand::Quit);
         }
 
         self.scheduler.poll_window_events_end=Time::now();
@@ -232,35 +192,39 @@ impl Render{
         ok!()
     }
 
-    fn handle_render_commands(&mut self) -> Result<bool,Error> {
+    fn handle_controller_commands(&mut self) -> Result<bool,Error> {
         loop {
-            let command = match try_recv!(self.render_receiver) {
-                Some(command) => command,
-                None => break,
+            let command = match self.controller_receiver.try_recv() {
+                Ok(command) => command,
+                Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) =>
+                    return err!(Error::ControllerThreadCrash, ThreadSource::Controller)
             };
 
             match command {
-                RenderCommand::ProcessThreadCrash(source) => return err!(Error::ProcessThreadCrash, source),
+                ControllerCommand::ProcessThreadCrash(source) => return err!(Error::ProcessThreadCrash, source),
 
-                RenderCommand::Shutdown =>
+                ControllerCommand::Shutdown =>
                     return ok!(true),
                 _ => {},
             }
         }
 
-        self.scheduler.handle_render_commands_end=Time::now();
+        self.scheduler.handle_controller_commands_end=Time::now();
 
         ok!(false)
     }
 
     fn handle_storage_commands(&mut self) -> Result<(),Error> {
-        let until=self.scheduler.handle_render_commands_end+self.scheduler.plan_storage_commands_handling_i;
+        let until=self.scheduler.handle_controller_commands_end+self.scheduler.plan_storage_commands_handling_i;
 
         loop {
             loop {
-                let command = match try_recv!(self.storage_receiver) {
-                    Some(command) => command,
-                    None => break,
+                let command = match self.storage_receiver.try_recv() {
+                    Ok(command) => command,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) =>
+                        return err!(Error::ControllerThreadCrash, ThreadSource::Controller)
                 };
 
                 match command {
@@ -287,7 +251,7 @@ impl Render{
     }
 
     fn render(&mut self) -> Result<(),Error> {
-        self.encoder.clear(&self.render_target, CLEAR_COLOR);
+        self.encoder.clear(&self.controller_target, CLEAR_COLOR);
 
         match self.ren() {
             Ok(_) => {},
@@ -327,7 +291,7 @@ impl Render{
             final_matrix: Matrix4::identity().into(),
             vbuf: lod.vertex_buffer.clone(),
             texture: (texture.view.clone(), sampler),
-            out: self.render_target.clone(),
+            out: self.controller_target.clone(),
             out_depth: self.depth_stencil.clone()
         };
 
@@ -363,14 +327,13 @@ impl Render{
         }
     }
 
-    fn synchronize_finish(&mut self) -> Result<(),Error>{
-        try_send![self.process_sender, ProcessCommand::RenderFinished];
+    fn synchronize_finish(&mut self) {
+        try_send![self.process_sender, ProcessCommand::ControllerFinished];
 
-        wait![self.render_receiver,
-            RenderCommand::ProcessFinished => ()
-        ].unwrap();
-
-        ok!()
+        match self.controller_receiver.recv() {
+            Ok( ControllerCommand::ProcessFinished ) => {},
+            _ => recv_error!(ControllerCommand::ProcessFinished),
+        }
     }
 
     /*
@@ -381,7 +344,7 @@ impl Render{
         /*
         let mut data = super::pipelines::TerrainPipeline::Data {
             vbuf: vertex_buffer,
-            out: self.render_target.clone()
+            out: self.controller_target.clone()
         };
         */
 
@@ -455,7 +418,7 @@ impl Render{
             final_matrix: Matrix4::identity().into(),
             vbuf: vertex_buffer,
             texture: (tex, sampler),
-            out: self.render_target.clone(),
+            out: self.controller_target.clone(),
             out_depth: self.depth_stencil.clone()
         };
 
@@ -463,15 +426,15 @@ impl Render{
 
         loop {
             loop {
-                let command = match self.render_receiver.try_recv() {
+                let command = match self.controller_receiver.try_recv() {
                     Ok(command) => command,
                     Err(std::sync::mpsc::TryRecvError::Empty) => break,
                     Err(std::sync::mpsc::TryRecvError::Disconnected) =>
-                        return err!(Error::RenderThreadCrash, ThreadSource::Render)
+                        return err!(Error::ControllerThreadCrash, ThreadSource::Controller)
                 };
 
                 match command {
-                    RenderCommand::LoadTexture(load_texture) =>
+                    ControllerCommand::LoadTexture(load_texture) =>
                         self.load_texture(load_texture)?
                 }
             }
@@ -499,7 +462,7 @@ impl Render{
             });
 
             // draw a frame
-            self.encoder.clear(&self.render_target, CLEAR_COLOR);
+            self.encoder.clear(&self.controller_target, CLEAR_COLOR);
             self.encoder.draw(&slice, &self.storage.terrain_pso, &data);
             self.encoder.flush(&mut self.gfx_device);
 

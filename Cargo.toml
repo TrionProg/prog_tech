@@ -5,6 +5,7 @@ authors = ["trionprog <trionprog@gmail.com>"]
 
 [dependencies]
 nes = { path = "../nes" }
+reactor = { path = "../reactor" }
 gfx_core = "0.7.2"
 gfx_device_gl = "0.14.5"
 gfx_window_glutin = "0.18.0"

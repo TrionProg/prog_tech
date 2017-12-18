@@ -1,3 +1,4 @@
+/*
 #[macro_export]
 macro_rules! try_send {
     [ $sender:expr, $message:expr ] => {
@@ -7,6 +8,7 @@ macro_rules! try_send {
         }
     };
 }
+*/
 
 #[macro_export]
 macro_rules! recv_error {

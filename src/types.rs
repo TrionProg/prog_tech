@@ -27,6 +27,8 @@ impl std::fmt::Display for ThreadSource{
     }
 }
 
+impl ::reactor::ThreadTrait for ThreadSource{}
+
 /*
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum MeshID {

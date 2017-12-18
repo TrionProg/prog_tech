@@ -1,5 +1,6 @@
 use std;
 use nes::{ErrorInfo,ErrorInfoTrait};
+use reactor;
 use gfx;
 use glutin;
 
@@ -13,8 +14,8 @@ define_error!( Error,
     ProcessThreadCrash(thread_source:ThreadSource) =>
         "[Source:{1}] Process thread has finished incorrecty(crashed)",
 
-    BrockenChannel() =>
-        "Broken channel",
+    BrockenChannel(error:Box<reactor::BrockenChannel<ThreadSource>>) =>
+        "{}",
     Poisoned() =>
         "Mutex has been poisoned",
 

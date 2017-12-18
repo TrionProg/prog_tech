@@ -1,5 +1,6 @@
 use std;
 use nes::{ErrorInfo,ErrorInfoTrait};
+use reactor;
 
 use types::*;
 
@@ -16,8 +17,8 @@ use ::Storage;
 use super::Error;
 use super::ProcessCommand;
 
-pub type ProcessSender = std::sync::mpsc::Sender<ProcessCommand>;
-pub type ProcessReceiver = std::sync::mpsc::Receiver<ProcessCommand>;
+pub type ProcessSender = reactor::Sender<ThreadSource,ProcessCommand>;
+pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
 
 pub struct Process {
     process_receiver:ProcessReceiver,
@@ -26,12 +27,48 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn run(render_sender:RenderSender, storage_sender:StorageSender) -> JoinHandle<()> {
-        let (process_sender, process_receiver) = std::sync::mpsc::channel();
+    pub fn run(mut render_sender:RenderSender, storage_sender:StorageSender) -> JoinHandle<()> {
+        let (process_sender, process_receiver):(ProcessSender,ProcessReceiver) = reactor::create_channel(ThreadSource::Process);
 
         let join_handle=thread::Builder::new().name("Process".to_string()).spawn(move|| {
-            try_send![render_sender, RenderCommand::ProcessSender(process_sender.clone())];
+            println!("0 {} {}",std::mem::size_of::<RenderSender>(), std::mem::size_of::<RenderCommand>());
+            println!("0 {}",std::mem::size_of::<Result<(),reactor::BrockenChannel<ThreadSource>>>());
+            let r=render_sender.send(RenderCommand::Shutdown);
+            /*
+            send![
+                render_sender, RenderCommand::ProcessSender(process_sender.clone())
+            ].unwrap();
+            */
 
+            /*
+            let result= {
+                let mut errors = Vec::new();
+
+                println!("a");
+
+                //$(
+                println!("e");
+                let cmd=RenderCommand::ProcessSender(process_sender.clone());
+                println!("ex");
+                match render_sender.send(RenderCommand::Shutdown) {
+                    Ok(_) => {},
+                    Err(e) => {println!("err"); errors.push(e);},
+                }
+                println!("b");
+                //)*
+
+                println!("c");
+
+                if errors.len() == 0 {
+                    Ok(())
+                } else {
+                    Err(errors)
+                }
+            }.unwrap();
+            */
+
+            println!("1");
+            /*
             let storage=Storage::new(storage_sender);
 
             let mut process=match Self::setup(process_receiver, render_sender.clone(), storage) {
@@ -39,19 +76,25 @@ impl Process {
                 Err(error) => {
                     println!("Process setup error: {}", error);
 
-                    try_send![render_sender, RenderCommand::ProcessSetupError];
+                    send![
+                        render_sender, RenderCommand::ProcessSetupError
+                    ].unwrap();
 
                     return;
                 }
             };
 
-            process.synchronize_setup();
+            println!("2");
+
+            process.synchronize_setup().unwrap();
+
+            println!("3");
 
             match process.lifecycle() {
                 Ok(_) => {
                     //do something
 
-                    process.synchronize_finish();
+                    process.synchronize_finish().unwrap();
                 }
                 Err(error) => {
                     println!("Process Error: {}", error);
@@ -65,11 +108,14 @@ impl Process {
                             */
                         }
                         _ => {
-                            try_send![process.render_sender, RenderCommand::ProcessThreadCrash(ThreadSource::Process)];
+                            send![
+                                process.render_sender, RenderCommand::ProcessThreadCrash(ThreadSource::Process)
+                            ].unwrap();
                         }
                     }
                 }
             }
+            */
         }).unwrap();
 
         join_handle
@@ -85,7 +131,14 @@ impl Process {
         ok!(process)
     }
 
-    fn synchronize_setup(&mut self) {
+    fn synchronize_setup(&mut self) -> Result<(),Error>{
+        wait![self.process_receiver,
+            ProcessCommand::RenderIsReady => ()
+        ].unwrap();
+
+        try_send![self.render_sender, RenderCommand::ProcessIsReady];
+
+        ok!()
         /*
         let mut ipc_listener_is_ready=false;
         let mut disk_is_ready=false;
@@ -107,7 +160,7 @@ impl Process {
             recv_error!(StorageCommand::DiskIsReady);
         }
         */
-
+        /*
         let mut render_is_ready=false;
 
         for _ in 0..1 {
@@ -120,6 +173,7 @@ impl Process {
         if render_is_ready {
             try_send![self.render_sender, RenderCommand::ProcessIsReady];
         }
+        */
     }
 
     fn lifecycle(&mut self) -> Result<(),Error> {
@@ -172,11 +226,9 @@ impl Process {
 
         loop {
             loop {
-                let command = match self.process_receiver.try_recv() {
-                    Ok(command) => command,
-                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) =>
-                        return err!(Error::BrockenChannel),
+                let command = match try_recv!(self.process_receiver) {
+                    Some(command) => command,
+                    None => break,
                 };
 
                 match command {
@@ -194,7 +246,14 @@ impl Process {
         }
     }
 
-    fn synchronize_finish(&mut self) {
+    fn synchronize_finish(&mut self) -> Result<(),Error>{
+        wait![self.process_receiver,
+            ProcessCommand::RenderFinished => ()
+        ].unwrap();
+
+        try_send![self.render_sender, RenderCommand::ProcessFinished];
+
+        ok!()
         /*
         let mut ipc_listener_finished=false;
         let mut disk_finished=false;
@@ -216,7 +275,7 @@ impl Process {
             recv_error!(StorageCommand::DiskIsReady);
         }
         */
-
+        /*
         let mut render_finished=false;
 
         for _ in 0..1 {
@@ -229,5 +288,6 @@ impl Process {
         if render_finished {
             try_send![self.render_sender, RenderCommand::ProcessFinished];
         }
+        */
     }
 }

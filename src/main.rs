@@ -2,6 +2,9 @@
 extern crate nes;
 
 #[macro_use]
+extern crate reactor;
+
+#[macro_use]
 extern crate gfx;
 
 extern crate object_pool;
