@@ -144,7 +144,7 @@ impl TextureStorage<RgbaTextureID, RgbaImage> for Storage {
 
         let texture_id=storage.textures_rgba.insert();
 
-        channel_send!(storage.storage_sender, LoadTexture::RGBA(image_buffer, texture_id.clone()).into());
+        try_send!(storage.storage_sender, LoadTexture::RGBA(image_buffer, texture_id.clone()).into());
 
         ok!(texture_id)
     }
@@ -162,7 +162,7 @@ impl MeshStorage<ObjectMeshID, ObjectMesh> for Storage {
 
         let mesh_id=storage.object_meshes.insert();
 
-        channel_send!(storage.storage_sender, LoadMesh::Object(mesh, mesh_id.clone()).into());
+        try_send!(storage.storage_sender, LoadMesh::Object(mesh, mesh_id.clone()).into());
 
         ok!(mesh_id)
     }
@@ -180,7 +180,7 @@ impl LodStorage<ObjectLodID, ObjectVertex> for Storage {
 
         let lod_id=storage.object_lods.insert();
 
-        channel_send!(storage.storage_sender, LoadLod::Object(vertex_buffer, lod_id.clone()).into());
+        try_send!(storage.storage_sender, LoadLod::Object(vertex_buffer, lod_id.clone()).into());
 
         ok!(lod_id)
     }

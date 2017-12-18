@@ -1,11 +1,12 @@
 use std;
 use nes::{ErrorInfo,ErrorInfoTrait};
+use reactor;
 
-//use ::ThreadSource;
+use types::ThreadSource;
 
 define_error!( Error,
-    BrockenChannel() =>
-        "Broken channel",
+    BrockenChannel(error:Box<reactor::BrockenChannel<ThreadSource>>) =>
+        "{}",
     Poisoned() =>
         "Mutex has been poisoned"
 );

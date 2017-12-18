@@ -31,44 +31,10 @@ impl Process {
         let (process_sender, process_receiver):(ProcessSender,ProcessReceiver) = reactor::create_channel(ThreadSource::Process);
 
         let join_handle=thread::Builder::new().name("Process".to_string()).spawn(move|| {
-            println!("0 {} {}",std::mem::size_of::<RenderSender>(), std::mem::size_of::<RenderCommand>());
-            println!("0 {}",std::mem::size_of::<Result<(),reactor::BrockenChannel<ThreadSource>>>());
-            let r=render_sender.send(RenderCommand::Shutdown);
-            /*
             send![
                 render_sender, RenderCommand::ProcessSender(process_sender.clone())
             ].unwrap();
-            */
 
-            /*
-            let result= {
-                let mut errors = Vec::new();
-
-                println!("a");
-
-                //$(
-                println!("e");
-                let cmd=RenderCommand::ProcessSender(process_sender.clone());
-                println!("ex");
-                match render_sender.send(RenderCommand::Shutdown) {
-                    Ok(_) => {},
-                    Err(e) => {println!("err"); errors.push(e);},
-                }
-                println!("b");
-                //)*
-
-                println!("c");
-
-                if errors.len() == 0 {
-                    Ok(())
-                } else {
-                    Err(errors)
-                }
-            }.unwrap();
-            */
-
-            println!("1");
-            /*
             let storage=Storage::new(storage_sender);
 
             let mut process=match Self::setup(process_receiver, render_sender.clone(), storage) {
@@ -84,11 +50,7 @@ impl Process {
                 }
             };
 
-            println!("2");
-
             process.synchronize_setup().unwrap();
-
-            println!("3");
 
             match process.lifecycle() {
                 Ok(_) => {
@@ -115,7 +77,6 @@ impl Process {
                     }
                 }
             }
-            */
         }).unwrap();
 
         join_handle

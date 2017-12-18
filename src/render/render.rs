@@ -68,7 +68,6 @@ impl Render{
         let (storage_sender, storage_receiver) = reactor::create_channel(ThreadSource::Render);
 
         let join_handle=thread::Builder::new().name("Render".to_string()).spawn(move|| {
-            /*
             let mut process_sender = Self::get_senders(&mut render_receiver).unwrap();
 
             let mut render=match Self::setup(render_receiver, storage_receiver, process_sender.clone()) {
@@ -111,7 +110,6 @@ impl Render{
                     }
                 }
             }
-            */
         }).unwrap();
 
         (join_handle, render_sender, storage_sender)
