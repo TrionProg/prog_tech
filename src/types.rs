@@ -12,16 +12,20 @@ pub use storage::{ObjectMeshID, ObjectLodID};
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
 pub enum ThreadSource{
-    Render=0,
-    Process=1,
-    Algorithm=2
+    Supervisor=0,
+    Render=1,
+    //Process=2,
+    Controller=3,
+    Algorithm=4
 }
 
 impl std::fmt::Display for ThreadSource{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match *self{
+            ThreadSource::Supervisor => write!(f, "Supervisor"),
             ThreadSource::Render => write!(f, "Render"),
-            ThreadSource::Process => write!(f, "Process"),
+            //ThreadSource::Process => write!(f, "Process"),
+            ThreadSource::Controller => write!(f, "Controller"),
             ThreadSource::Algorithm => write!(f, "Algorithm"),
         }
     }

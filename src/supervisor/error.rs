@@ -7,7 +7,7 @@ use reactor;
 use types::ThreadSource;
 define_error!( Error,
     ThreadCrash(thread:ThreadSource) =>
-        "[Controller] {1} has crashed",
+        "[Supervisor] {1} has crashed",
 
     BrockenChannel(error:Box<reactor::BrockenChannel<ThreadSource>>) =>
         "{}",

@@ -22,18 +22,17 @@ pub mod macros;
 pub mod storage;
 pub use storage::Storage;
 
-pub mod render;
-use render::Render;
+pub mod supervisor;
+pub use supervisor::Supervisor;
 
-pub mod process;
-pub use process::Process;
+pub mod render;
+
+//pub mod process;
+
+pub mod controller;
 
 //use process::Process;
 
 pub fn main() {
-    let (render_join_handler, render_sender, storage_sender)=Render::run();
-    let process_join_handler=Process::run(render_sender, storage_sender);
-
-    render_join_handler.join();
-    process_join_handler.join();
+    Supervisor::run();
 }

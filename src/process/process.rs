@@ -27,8 +27,8 @@ pub struct Process {
 }
 
 impl Process {
-    pub fn run(mut render_sender:RenderSender, storage_sender:StorageSender) -> JoinHandle<()> {
-        let (process_sender, process_receiver):(ProcessSender,ProcessReceiver) = reactor::create_channel(ThreadSource::Process);
+    pub fn run() -> JoinHandle<()> {
+        let (process_sender, process_receiver) = reactor::create_channel(ThreadSource::Process);
 
         let join_handle=thread::Builder::new().name("Process".to_string()).spawn(move|| {
             send![
@@ -79,7 +79,19 @@ impl Process {
             }
         }).unwrap();
 
-        join_handle
+        (join_handle
+    }
+
+    fn get_senders(receiver:&mut RenderReceiver) -> Result<(RenderSender, ControllerSender),Error> {
+        let render_sender=wait![receiver,
+            ProcessCommand::RenderSender(render_sender) => render_sender
+        ].unwrap();
+
+        let controller_sender=wait![receiver,
+            ProcessCommand::ControllerSender(controller_sender) => controller_sender
+        ].unwrap();
+
+        ok!((process_sender, controller_sender))
     }
 
     fn setup(process_receiver:ProcessReceiver, render_sender:RenderSender, storage:Storage) -> Result<Self,Error> {
@@ -95,6 +107,10 @@ impl Process {
     fn synchronize_setup(&mut self) -> Result<(),Error>{
         wait![self.process_receiver,
             ProcessCommand::RenderIsReady => ()
+        ].unwrap();
+
+        wait![self.process_receiver,
+            ProcessCommand::ControllerIsReady => ()
         ].unwrap();
 
         try_send![self.render_sender, RenderCommand::ProcessIsReady];
@@ -210,6 +226,10 @@ impl Process {
     fn synchronize_finish(&mut self) -> Result<(),Error>{
         wait![self.process_receiver,
             ProcessCommand::RenderFinished => ()
+        ].unwrap();
+
+        wait![self.process_receiver,
+            ProcessCommand::ControllerFinished => ()
         ].unwrap();
 
         try_send![self.render_sender, RenderCommand::ProcessFinished];

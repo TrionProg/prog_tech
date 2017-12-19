@@ -8,5 +8,9 @@ pub enum ProcessCommand {
     RenderIsReady,
     RenderFinished,
 
+    ControllerSetupError,
+    ControllerIsReady,
+    ControllerFinished,
+
     Quit
 }

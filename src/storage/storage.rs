@@ -10,8 +10,8 @@ use std::ops::DerefMut;
 use std::sync::{Arc,Mutex};
 use self::object_pool::growable::Pool;
 
-use render::StorageSender;
-use render::{StorageCommand, LoadTexture, LoadMesh, LoadLod};
+use render::RenderSender;
+use render::{RenderCommand, LoadTexture, LoadMesh, LoadLod};
 
 use render::storage::ObjectVertex;
 use render::storage::ObjectMesh;
@@ -41,7 +41,7 @@ pub struct Storage {
 }
 
 struct InnerStorage {
-    storage_sender:StorageSender,
+    render_sender:RenderSender,
 
     textures_rgba:InnerTextureStorage<RgbaTextureID>,
     //textures_rgbaa:InnerTextureStorage<RgbaTextureID>,
@@ -52,9 +52,9 @@ struct InnerStorage {
 }
 
 impl InnerStorage {
-    fn new(storage_sender:StorageSender) -> Self {
+    fn new(render_sender:RenderSender) -> Self {
         InnerStorage {
-            storage_sender,
+            render_sender,
 
             textures_rgba:InnerTextureStorage::new(),
 
@@ -66,8 +66,8 @@ impl InnerStorage {
 }
 
 impl Storage {
-    pub fn new(storage_sender:StorageSender) -> Self {
-        let inner=InnerStorage::new(storage_sender);
+    pub fn new(render_sender:RenderSender) -> Self {
+        let inner=InnerStorage::new(render_sender);
 
         Storage {
             inner:Arc::new(Mutex::new(inner))
@@ -144,7 +144,7 @@ impl TextureStorage<RgbaTextureID, RgbaImage> for Storage {
 
         let texture_id=storage.textures_rgba.insert();
 
-        try_send!(storage.storage_sender, LoadTexture::RGBA(image_buffer, texture_id.clone()).into());
+        try_send!(storage.render_sender, LoadTexture::RGBA(image_buffer, texture_id.clone()).into());
 
         ok!(texture_id)
     }
@@ -162,7 +162,7 @@ impl MeshStorage<ObjectMeshID, ObjectMesh> for Storage {
 
         let mesh_id=storage.object_meshes.insert();
 
-        try_send!(storage.storage_sender, LoadMesh::Object(mesh, mesh_id.clone()).into());
+        try_send!(storage.render_sender, LoadMesh::Object(mesh, mesh_id.clone()).into());
 
         ok!(mesh_id)
     }
@@ -180,7 +180,7 @@ impl LodStorage<ObjectLodID, ObjectVertex> for Storage {
 
         let lod_id=storage.object_lods.insert();
 
-        try_send!(storage.storage_sender, LoadLod::Object(vertex_buffer, lod_id.clone()).into());
+        try_send!(storage.render_sender, LoadLod::Object(vertex_buffer, lod_id.clone()).into());
 
         ok!(lod_id)
     }

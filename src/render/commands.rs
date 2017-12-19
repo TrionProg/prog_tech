@@ -1,23 +1,26 @@
 
 use types::*;
 
-use process::ProcessSender;
+use supervisor::SupervisorSender;
+use controller::ControllerSender;
 
 use render::storage::ObjectMesh;
 use render::pipelines::ObjectVertex;
 
 pub enum RenderCommand {
-    ProcessThreadCrash(ThreadSource),
+    ThreadCrash(ThreadSource),
 
-    ProcessSender(ProcessSender),
-    ProcessSetupError,
+    SupervisorSender(SupervisorSender),
+    ControllerSender(ControllerSender),
 
-    ProcessIsReady,
-    ProcessFinished,
+    SupervisorReady,
+    SupervisorFinished,
+
+    Tick,
     Shutdown,
-}
 
-pub enum StorageCommand {
+    ResizeWindow(u32,u32),
+
     LoadTexture(LoadTexture),
     LoadMesh(LoadMesh),
     LoadLod(LoadLod),
@@ -27,9 +30,9 @@ pub enum LoadTexture {
     RGBA(RgbaImage, RgbaTextureID),
 }
 
-impl Into<StorageCommand> for LoadTexture {
-    fn into(self) -> StorageCommand {
-        StorageCommand::LoadTexture(self)
+impl Into<RenderCommand> for LoadTexture {
+    fn into(self) -> RenderCommand {
+        RenderCommand::LoadTexture(self)
     }
 }
 
@@ -37,9 +40,9 @@ pub enum LoadMesh {
     Object(ObjectMesh, ObjectMeshID),
 }
 
-impl Into<StorageCommand> for LoadMesh {
-    fn into(self) -> StorageCommand {
-        StorageCommand::LoadMesh(self)
+impl Into<RenderCommand> for LoadMesh {
+    fn into(self) -> RenderCommand {
+        RenderCommand::LoadMesh(self)
     }
 }
 
@@ -47,8 +50,8 @@ pub enum LoadLod {
     Object(Vec<ObjectVertex>, ObjectLodID)
 }
 
-impl Into<StorageCommand> for LoadLod {
-    fn into(self) -> StorageCommand {
-        StorageCommand::LoadLod(self)
+impl Into<RenderCommand> for LoadLod {
+    fn into(self) -> RenderCommand {
+        RenderCommand::LoadLod(self)
     }
 }

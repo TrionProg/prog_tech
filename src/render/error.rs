@@ -1,18 +1,14 @@
 use std;
 use nes::{ErrorInfo,ErrorInfoTrait};
-use reactor;
 use gfx;
 use glutin;
+use reactor;
 
 use types::ThreadSource;
 
-//use ::ThreadSource;
-
 define_error!( Error,
-    RenderThreadCrash(thread_source:ThreadSource) =>
-        "[Source:{1}] Render thread has finished incorrecty(crashed)",
-    ProcessThreadCrash(thread_source:ThreadSource) =>
-        "[Source:{1}] Process thread has finished incorrecty(crashed)",
+    ThreadCrash(thread:ThreadSource) =>
+        "[Render] {1} has crashed",
 
     BrockenChannel(error:Box<reactor::BrockenChannel<ThreadSource>>) =>
         "{}",
