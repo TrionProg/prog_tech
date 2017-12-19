@@ -7,3 +7,6 @@ pub use self::controller::{Controller, ControllerSender};
 
 pub mod commands;
 pub use self::commands::ControllerCommand;
+
+pub mod gui;
+pub use self::gui::{GUI,Input};

@@ -3,15 +3,19 @@ use types::*;
 
 use supervisor::SupervisorSender;
 use controller::ControllerSender;
+use process::ProcessSender;
 
 use render::storage::ObjectMesh;
 use render::pipelines::ObjectVertex;
+use::Camera;
 
 pub enum RenderCommand {
     ThreadCrash(ThreadSource),
 
     SupervisorSender(SupervisorSender),
     ControllerSender(ControllerSender),
+    ProcessSender(ProcessSender),
+    Camera(Camera),
 
     SupervisorReady,
     SupervisorFinished,
@@ -24,6 +28,8 @@ pub enum RenderCommand {
     LoadTexture(LoadTexture),
     LoadMesh(LoadMesh),
     LoadLod(LoadLod),
+
+    ResourcesReady,
 }
 
 pub enum LoadTexture {

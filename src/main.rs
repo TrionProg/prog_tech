@@ -27,11 +27,14 @@ pub use supervisor::Supervisor;
 
 pub mod render;
 
-//pub mod process;
+pub mod process;
 
 pub mod controller;
 
-//use process::Process;
+pub mod location;
+
+pub mod camera;
+pub use camera::Camera;
 
 pub fn main() {
     Supervisor::run();

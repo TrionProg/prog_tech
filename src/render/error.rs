@@ -32,3 +32,12 @@ define_error!( Error,
     Other(message:String) =>
         "{}"
 );
+
+use camera::Error as CameraError;
+impl From<CameraError> for Error{
+    fn from(camera_error:CameraError) -> Self {
+        match camera_error {
+            CameraError::Poisoned(error_info) => Error::Poisoned(error_info)
+        }
+    }
+}

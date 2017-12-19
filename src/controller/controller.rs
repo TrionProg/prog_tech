@@ -7,15 +7,10 @@ use types::*;
 
 use glutin::EventsLoop;
 use glutin::WindowEvent;
+use glutin::ElementState;
 
 use std::thread;
 use std::thread::JoinHandle;
-
-/*
-use process;
-use process::SupervisorSender;
-use process::SupervisorCommand;
-*/
 
 use supervisor;
 use supervisor::SupervisorSender;
@@ -25,8 +20,15 @@ use render;
 use render::RenderSender;
 use render::RenderCommand;
 
+use process;
+use process::ProcessSender;
+use process::ProcessCommand;
+
+use ::Camera;
+
 use super::Error;
 use super::ControllerCommand;
+use super::GUI;
 
 pub type ControllerSender = reactor::Sender<ThreadSource,ControllerCommand>;
 pub type ControllerReceiver = reactor::Receiver<ThreadSource,ControllerCommand>;
@@ -35,8 +37,11 @@ pub struct Controller {
     controller_receiver:ControllerReceiver,
     supervisor_sender:SupervisorSender,
     render_sender:RenderSender,
+    process_sender:ProcessSender,
 
     events_loop:EventsLoop,
+    gui:GUI,
+    camera:Camera,
 }
 
 impl Controller{
@@ -44,9 +49,15 @@ impl Controller{
         let (controller_sender, mut controller_receiver) = reactor::create_channel(ThreadSource::Controller);
 
         let join_handle=thread::Builder::new().name("Controller".to_string()).spawn(move|| {
-            let (mut supervisor_sender, mut render_sender) = Self::get_senders(&mut controller_receiver).unwrap();
+            let (mut supervisor_sender, mut render_sender, mut process_sender) = Self::get_senders(&mut controller_receiver).unwrap();
 
             println!("C1");
+
+            let camera=Camera::new(1024, 768);
+
+            send![
+                render_sender, RenderCommand::Camera(camera.clone())
+            ].unwrap();
 
             let events_loop=wait![controller_receiver,
                 ControllerCommand::EventsLoop(events_loop) => events_loop
@@ -54,14 +65,22 @@ impl Controller{
 
             println!("C2");
 
-            let mut controller=match Self::setup(controller_receiver, supervisor_sender.clone(), render_sender.clone(), events_loop) {
+            let mut controller=match Self::setup(
+                controller_receiver,
+                supervisor_sender.clone(),
+                render_sender.clone(),
+                process_sender.clone(),
+                events_loop,
+                camera
+            ) {
                 Ok(controller) => controller,
                 Err(error) => {
                     println!("Controller setup error: {}", error);
 
                     send![
                         supervisor_sender, SupervisorCommand::ThreadCrash(ThreadSource::Controller),
-                        render_sender, RenderCommand::ThreadCrash(ThreadSource::Controller)
+                        render_sender, RenderCommand::ThreadCrash(ThreadSource::Controller),
+                        process_sender, ProcessCommand::ThreadCrash(ThreadSource::Controller)
                     ].unwrap();
 
                     return;
@@ -96,7 +115,8 @@ impl Controller{
                         _ => {
                             send![
                                 controller.supervisor_sender, SupervisorCommand::ThreadCrash(ThreadSource::Controller),
-                                controller.render_sender, RenderCommand::ThreadCrash(ThreadSource::Controller)
+                                controller.render_sender, RenderCommand::ThreadCrash(ThreadSource::Controller),
+                                controller.process_sender, ProcessCommand::ThreadCrash(ThreadSource::Controller)
                             ].unwrap();
                         }
                     }
@@ -109,7 +129,7 @@ impl Controller{
         (join_handle, controller_sender)
     }
 
-    fn get_senders(receiver:&mut ControllerReceiver) -> Result<(SupervisorSender,RenderSender),Error> {
+    fn get_senders(receiver:&mut ControllerReceiver) -> Result<(SupervisorSender,RenderSender,ProcessSender),Error> {
         let supervisor_sender=wait![receiver,
             ControllerCommand::SupervisorSender(supervisor_sender) => supervisor_sender
         ].unwrap();
@@ -118,16 +138,30 @@ impl Controller{
             ControllerCommand::RenderSender(render_sender) => render_sender
         ].unwrap();
 
-        ok!((supervisor_sender,render_sender))
+        let process_sender=wait![receiver,
+            ControllerCommand::ProcessSender(process_sender) => process_sender
+        ].unwrap();
+
+        ok!((supervisor_sender,render_sender,process_sender))
     }
 
-    fn setup(controller_receiver:ControllerReceiver, supervisor_sender:SupervisorSender, render_sender:RenderSender, events_loop:EventsLoop) -> Result<Self,Error> {
+    fn setup(
+        controller_receiver:ControllerReceiver,
+        supervisor_sender:SupervisorSender,
+        render_sender:RenderSender,
+        process_sender:ProcessSender,
+        events_loop:EventsLoop,
+        camera:Camera,
+    ) -> Result<Self,Error> {
         let controller=Controller {
             controller_receiver,
             supervisor_sender,
             render_sender,
+            process_sender,
 
-            events_loop
+            events_loop,
+            gui:GUI::new(),
+            camera,
         };
 
         ok!(controller)
@@ -159,6 +193,8 @@ impl Controller{
         let mut quit=false;
 
         let events_loop=&mut self.events_loop;
+        let gui=&mut self.gui;
+        let camera=&self.camera;
         let supervisor_sender=&mut self.supervisor_sender;
         let render_sender=&mut self.render_sender;
         let mut result=Ok(());
@@ -166,22 +202,43 @@ impl Controller{
         events_loop.poll_events(move|event| {
             if let glutin::Event::WindowEvent { event, .. } = event {
 
-                fn handle_event(event:WindowEvent, supervisor_sender:&mut SupervisorSender, render_sender:&mut RenderSender) -> Result<(),Error> {
+                let mut handle_event=||{
                     match event {
-                        glutin::WindowEvent::KeyboardInput {
+                        WindowEvent::KeyboardInput {
                             input: glutin::KeyboardInput {
                                 virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
                                 .. },
                             ..
-                        } | glutin::WindowEvent::Closed => try_send!(supervisor_sender, SupervisorCommand::Quit),
-                        glutin::WindowEvent::Resized(width, height) => try_send!(render_sender, RenderCommand::ResizeWindow(width,height)),
+                        } | WindowEvent::Closed =>
+                            try_send!(supervisor_sender, SupervisorCommand::Quit),
+                        WindowEvent::Resized(width, height) => {
+                            camera.resize(width,height)?;
+                            try_send!(render_sender, RenderCommand::ResizeWindow(width,height));
+                        },
+                        WindowEvent::MouseMoved {device_id, position: (x, y)} => {
+                            gui.on_mouse_move(x as i32,y as i32);
+
+                            if gui.input.left_mouse_button==ElementState::Pressed {
+                                camera.rotate(&gui.input)?;
+                            }
+                        },
+                        WindowEvent::MouseInput{device_id, state, button} => {
+                            gui.on_mouse_button(state, button);
+
+                            if gui.input.right_mouse_button==ElementState::Pressed {
+
+                            }
+                        },
+                        WindowEvent::MouseWheel {device_id, delta, phase} => {
+                            camera.on_mouse_wheel(delta)?;
+                        },
                         _ => {},
                     }
 
                     ok!(())
-                }
+                };
 
-                result=handle_event(event, supervisor_sender, render_sender);
+                result=handle_event();
 
                 if result.is_err() {
                     return;

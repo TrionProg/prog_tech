@@ -15,12 +15,6 @@ use glutin::EventsLoop;
 use std::thread;
 use std::thread::JoinHandle;
 
-/*
-use process;
-use process::SupervisorSender;
-use process::SupervisorCommand;
-*/
-
 use supervisor;
 use supervisor::SupervisorSender;
 use supervisor::SupervisorCommand;
@@ -28,6 +22,12 @@ use supervisor::SupervisorCommand;
 use controller;
 use controller::ControllerSender;
 use controller::ControllerCommand;
+
+use process;
+use process::ProcessSender;
+use process::ProcessCommand;
+
+use ::Camera as CommonCamera;
 
 use super::Error;
 use super::Window;
@@ -51,6 +51,7 @@ pub struct Render {
     render_receiver:RenderReceiver,
     supervisor_sender:SupervisorSender,
     controller_sender:ControllerSender,
+    process_sender:ProcessSender,
 
     window: Window,
     render_target:RenderTarget,
@@ -65,6 +66,9 @@ pub struct Render {
     storage: Storage,
     //font: rusttype::Font<'static>,
     //pub data: pipe::Data<gfx_gl::Resources>,
+
+    resources_loaded:bool,
+    camera:CommonCamera
 }
 
 impl Render{
@@ -72,20 +76,32 @@ impl Render{
         let (render_sender, mut render_receiver) = reactor::create_channel(ThreadSource::Render);
 
         let join_handle=thread::Builder::new().name("Render".to_string()).spawn(move|| {
-            let (mut supervisor_sender, mut controller_sender) = Self::get_senders(&mut render_receiver).unwrap();
+            let (mut supervisor_sender, mut controller_sender, mut process_sender) = Self::get_senders(&mut render_receiver).unwrap();
+
+            let camera=wait![render_receiver,
+                RenderCommand::Camera(camera) => camera
+            ].unwrap();
 
             println!("R1");
 
             let mut events_loop = glutin::EventsLoop::new();
 
-            let mut render=match Self::setup(render_receiver, supervisor_sender.clone(), controller_sender.clone(), &events_loop) {
+            let mut render=match Self::setup(
+                render_receiver,
+                supervisor_sender.clone(),
+                controller_sender.clone(),
+                process_sender.clone(),
+                &events_loop,
+                camera
+            ) {
                 Ok(render) => render,
                 Err(error) => {
                     println!("Render setup error: {}", error);
 
                     send![
                         supervisor_sender, SupervisorCommand::ThreadCrash(ThreadSource::Render),
-                        controller_sender, ControllerCommand::ThreadCrash(ThreadSource::Render)
+                        controller_sender, ControllerCommand::ThreadCrash(ThreadSource::Render),
+                        process_sender, ProcessCommand::ThreadCrash(ThreadSource::Render)
                     ].unwrap();
 
                     return;
@@ -125,7 +141,8 @@ impl Render{
                         _ => {
                             send![
                                 supervisor_sender , SupervisorCommand::ThreadCrash(ThreadSource::Render),
-                                controller_sender , ControllerCommand::ThreadCrash(ThreadSource::Render)
+                                controller_sender , ControllerCommand::ThreadCrash(ThreadSource::Render),
+                                process_sender , ProcessCommand::ThreadCrash(ThreadSource::Render)
                             ].unwrap();
                         }
                     }
@@ -138,7 +155,7 @@ impl Render{
         (join_handle, render_sender)
     }
 
-    fn get_senders(receiver:&mut RenderReceiver) -> Result<(SupervisorSender, ControllerSender),Error> {
+    fn get_senders(receiver:&mut RenderReceiver) -> Result<(SupervisorSender, ControllerSender, ProcessSender),Error> {
         let supervisor_sender=wait![receiver,
             RenderCommand::SupervisorSender(supervisor_sender) => supervisor_sender
         ].unwrap();
@@ -147,10 +164,21 @@ impl Render{
             RenderCommand::ControllerSender(controller_sender) => controller_sender
         ].unwrap();
 
-        ok!((supervisor_sender, controller_sender))
+        let process_sender=wait![receiver,
+            RenderCommand::ProcessSender(process_sender) => process_sender
+        ].unwrap();
+
+        ok!((supervisor_sender, controller_sender, process_sender))
     }
 
-    fn setup(render_receiver:RenderReceiver, supervisor_sender:SupervisorSender, controller_sender:ControllerSender, events_loop:&EventsLoop) -> Result<Self,Error> {
+    fn setup(
+        render_receiver:RenderReceiver,
+        supervisor_sender:SupervisorSender,
+        controller_sender:ControllerSender,
+        process_sender:ProcessSender,
+        events_loop:&EventsLoop,
+        camera:CommonCamera
+    ) -> Result<Self,Error> {
         let window_config = glutin::WindowBuilder::new()
             .with_title("Triangle example".to_string())
             .with_dimensions(1024, 768);
@@ -168,6 +196,7 @@ impl Render{
             render_receiver,
             supervisor_sender,
             controller_sender,
+            process_sender,
 
             window,
             render_target,
@@ -175,7 +204,10 @@ impl Render{
 
             gfx_device,
             encoder,
-            storage
+            storage,
+
+            resources_loaded:false,
+            camera
         };
 
         ok!(render)
@@ -196,7 +228,6 @@ impl Render{
             self.render()?;
 
             if self.handle_render_commands()? {
-                println!("QUIT4");
                 return ok!();
             }
         }
@@ -218,6 +249,12 @@ impl Render{
                     self.load_mesh(load_mesh)?,
                 RenderCommand::LoadLod(load_lod) =>
                     self.load_lod(load_lod)?,
+
+                RenderCommand::ResourcesReady => {
+                    self.resources_loaded=true;
+                    try_send!(self.process_sender, ProcessCommand::ResourcesLoaded);
+                },
+
                 _ => unreachable!()
             }
         }
@@ -226,13 +263,11 @@ impl Render{
     fn render(&mut self) -> Result<(),Error> {
         self.gfx_device.cleanup();
         self.encoder.clear(&self.render_target, CLEAR_COLOR);
+        self.encoder.clear_depth(&self.depth_stencil, 1.0);
 
-        /*
-        match self.ren() {
-            Ok(_) => {},
-            Err(e) => println!("{}",e)
+        if self.resources_loaded {
+            self.render_map()?;
         }
-        */
 
         //self.encoder.draw(&slice, &self.storage.terrain_pso, &data);
         self.encoder.flush(&mut self.gfx_device);
@@ -241,8 +276,8 @@ impl Render{
 
         ok!()
     }
-/*
-    fn ren(&mut self) -> Result<(),Error> {
+
+    fn render_map(&mut self) -> Result<(),Error> {
         use cgmath::Matrix4;
         use storage::mesh::MeshID;
         use gfx::traits::FactoryExt;
@@ -257,11 +292,16 @@ impl Render{
         let texture=self.storage.textures_rgba.get(texture_id)?;
         let lod=self.storage.object_lods.get(lod_id)?;
 
+        let camera=self.camera.get_render_camera()?.unwrap();
+
+        let final_matrix=camera.perspective_matrix * camera.camera_matrix;
+
+
         let sampler = self.storage.gfx_factory.create_sampler_linear();
 
         let data = super::pipelines::ObjectPipeline::Data {
             basic_color: [1.0, 1.0, 1.0, 1.0],
-            final_matrix: Matrix4::identity().into(),
+            final_matrix: final_matrix.into(),
             vbuf: lod.vertex_buffer.clone(),
             texture: (texture.view.clone(), sampler),
             out: self.render_target.clone(),
@@ -272,8 +312,6 @@ impl Render{
 
         ok!()
     }
-
-*/
 
     fn resize_window(&mut self, width:u32, height:u32) -> Result<(),Error> {
         self.window.resize(width, height, &mut self.render_target, &mut self.depth_stencil);
@@ -320,142 +358,4 @@ impl Render{
 
         ok!()
     }
-
-    /*
-    fn renderol(&mut self) -> Result<(),Error> {
-        //use ::pipe;
-        use gfx::traits::FactoryExt;
-        let (vertex_buffer, slice) = self.storage.gfx_factory.create_vertex_buffer_with_slice(&TRIANGLE, ());
-        /*
-        let mut data = super::pipelines::TerrainPipeline::Data {
-            vbuf: vertex_buffer,
-            out: self.render_target.clone()
-        };
-        */
-
-        use cgmath::{Vector2, Matrix4, SquareMatrix, Array};
-
-        use gfx::handle::{ShaderResourceView};
-
-        fn load_texture_raw<R, F>(factory: &mut F) -> ShaderResourceView<R, [f32; 4]>
-            where R: gfx::Resources, F: gfx::Factory<R>
-        {
-            use gfx::texture;
-
-            const data: [[u8; 4]; 4] = [
-                [ 0xFF, 0x00, 0x00, 0xFF ], [ 0x00, 0xFF, 0x00, 0xFF ],
-                [ 0x00, 0x00, 0xFF, 0xFF ], [ 0xFF, 0xFF, 0xFF, 0xFF ],
-            ];
-
-            //let kind = texture::Kind::D2(2 as texture::Size, 2 as texture::Size, texture::AaMode::Single);
-            let (_, view) = factory.create_texture_immutable::<ColorFormat>(
-                texture::Kind::D2(2, 2, texture::AaMode::Single),
-                //texture::Mipmap::Provided,
-                &[&data]
-            ).unwrap();
-            //let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[data]).unwrap();
-            view
-        }
-
-        fn load_texture<R, F>(factory: &mut F) -> ShaderResourceView<R, [f32; 4]>
-            where R: gfx::Resources, F: gfx::Factory<R>
-        {
-            use std::fs::{File};
-            use std::io::{Read};
-            use std::io::{Cursor};
-            use image;
-            use gfx::texture;
-
-            let mut buf = Vec::new();
-            let fullpath = "img.png";//&Path::new("img.png");//.join(&path);
-            let mut file = match File::open(&fullpath) {
-                Ok(file) => file,
-                Err(err) => {
-                    panic!("Can`t open file '{}' ({})", fullpath, err);
-                },
-            };
-            let cursor=match file.read_to_end(&mut buf) {
-                Ok(_) => Cursor::new(buf),
-                Err(err) => {
-                    panic!("Can`t read file '{}' ({})", fullpath, err);
-                },
-            };
-
-            let img = image::load(cursor, image::PNG).unwrap().to_rgba();
-            let (w, h) = img.dimensions();
-            let data=&img.into_vec();
-
-            let (_, view) = factory.create_texture_immutable_u8::<ColorFormat>(
-                texture::Kind::D2(w as texture::Size, h as texture::Size, texture::AaMode::Single),
-                //texture::Mipmap::Provided,
-                &[&data[..]]
-            ).unwrap();
-            //let (_, view) = factory.create_texture_const_u8::<ColorFormat>(kind, &[data]).unwrap();
-            view
-        }
-
-        let sampler = self.storage.gfx_factory.create_sampler_linear();
-        let fake_texture = load_texture_raw(&mut self.storage.gfx_factory);
-        let tex=load_texture(&mut self.storage.gfx_factory);
-
-        let data = super::pipelines::TerrainPipeline::Data {
-            basic_color: [1.0, 1.0, 1.0, 1.0],
-            final_matrix: Matrix4::identity().into(),
-            vbuf: vertex_buffer,
-            texture: (tex, sampler),
-            out: self.render_target.clone(),
-            out_depth: self.depth_stencil.clone()
-        };
-
-        let mut next_frame=Time::now();
-
-        loop {
-            loop {
-                let command = match self.render_receiver.try_recv() {
-                    Ok(command) => command,
-                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
-                    Err(std::sync::mpsc::TryRecvError::Disconnected) =>
-                        return err!(Error::RenderThreadCrash, ThreadSource::Render)
-                };
-
-                match command {
-                    RenderCommand::LoadTexture(load_texture) =>
-                        self.load_texture(load_texture)?
-                }
-            }
-        }
-
-        let mut running = true;
-        while running {
-            // fetch events
-            self.events_loop.poll_events(|event| {
-                if let glutin::Event::WindowEvent { event, .. } = event {
-                    match event {
-                        glutin::WindowEvent::KeyboardInput {
-                            input: glutin::KeyboardInput {
-                                virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
-                                .. },
-                            ..
-                        } | glutin::WindowEvent::Closed => running = false,
-                        glutin::WindowEvent::Resized(width, height) => {
-                            //self.window.resize(width, height);
-                            //gfx_glutin::update_views(&context.window, &mut context.data.out, &mut context.main_depth);
-                        },
-                        _ => (),
-                    }
-                }
-            });
-
-            // draw a frame
-            self.encoder.clear(&self.render_target, CLEAR_COLOR);
-            self.encoder.draw(&slice, &self.storage.terrain_pso, &data);
-            self.encoder.flush(&mut self.gfx_device);
-
-            self.window.swap_buffers()?;
-            self.gfx_device.cleanup();
-        }
-
-        ok!()
-    }
-    */
 }

@@ -7,11 +7,6 @@ use types::*;
 use std::thread;
 use std::thread::JoinHandle;
 
-/*
-use process;
-use process::ProcessSender;
-use process::ProcessCommand;
-*/
 
 use render;
 use render::Render;
@@ -23,6 +18,11 @@ use controller::Controller;
 use controller::ControllerSender;
 use controller::ControllerCommand;
 
+use process;
+use process::Process;
+use process::ProcessSender;
+use process::ProcessCommand;
+
 use super::Error;
 use super::SupervisorCommand;
 
@@ -33,7 +33,8 @@ pub struct Supervisor {
     supervisor_receiver:SupervisorReceiver,
     supervisor_sender:SupervisorSender,
     render_sender:RenderSender,
-    controller_sender:ControllerSender
+    controller_sender:ControllerSender,
+    process_sender:ProcessSender
 }
 
 impl Supervisor {
@@ -41,18 +42,26 @@ impl Supervisor {
         let (supervisor_sender, mut supervisor_receiver) = reactor::create_channel(ThreadSource::Render);
         let (render_join_handler, mut render_sender) = Render::run();
         let (controller_join_handler, mut controller_sender) = Controller::run();
-        //let (process_join_handler, process_sender) = Process::run();
+        let (process_join_handler, mut process_sender) = Process::run();
 
         println!("S1");
 
         send![
             render_sender, RenderCommand::SupervisorSender(supervisor_sender.clone()),
-            render_sender, RenderCommand::ControllerSender(controller_sender.clone())
+            render_sender, RenderCommand::ControllerSender(controller_sender.clone()),
+            render_sender, RenderCommand::ProcessSender(process_sender.clone())
         ].unwrap();
 
         send![
             controller_sender, ControllerCommand::SupervisorSender(supervisor_sender.clone()),
-            controller_sender, ControllerCommand::RenderSender(render_sender.clone())
+            controller_sender, ControllerCommand::RenderSender(render_sender.clone()),
+            controller_sender, ControllerCommand::ProcessSender(process_sender.clone())
+        ].unwrap();
+
+        send![
+            process_sender, ProcessCommand::SupervisorSender(supervisor_sender.clone()),
+            process_sender, ProcessCommand::RenderSender(render_sender.clone()),
+            process_sender, ProcessCommand::ControllerSender(controller_sender.clone())
         ].unwrap();
 
         println!("S2");
@@ -61,7 +70,8 @@ impl Supervisor {
             supervisor_receiver,
             supervisor_sender.clone(),
             render_sender.clone(),
-            controller_sender.clone()
+            controller_sender.clone(),
+            process_sender.clone(),
         );
 
         println!("S3");
@@ -95,15 +105,22 @@ impl Supervisor {
 
         controller_join_handler.join();
         render_join_handler.join();
-        //process_join_handler.join();
+        process_join_handler.join();
     }
 
-    fn setup(supervisor_receiver:SupervisorReceiver, supervisor_sender:SupervisorSender, render_sender:RenderSender, controller_sender:ControllerSender) -> Self {
+    fn setup(
+        supervisor_receiver:SupervisorReceiver,
+        supervisor_sender:SupervisorSender,
+        render_sender:RenderSender,
+        controller_sender:ControllerSender,
+        process_sender:ProcessSender
+    ) -> Self {
         Supervisor {
             supervisor_receiver,
             supervisor_sender,
             render_sender,
-            controller_sender
+            controller_sender,
+            process_sender
         }
     }
 
@@ -116,9 +133,14 @@ impl Supervisor {
             SupervisorCommand::ThreadReady(ThreadSource::Controller) => ()
         ].unwrap();
 
+        wait![self.supervisor_receiver,
+            SupervisorCommand::ThreadReady(ThreadSource::Process) => ()
+        ].unwrap();
+
         send![
             self.render_sender, RenderCommand::SupervisorReady,
-            self.controller_sender, ControllerCommand::SupervisorReady
+            self.controller_sender, ControllerCommand::SupervisorReady,
+            self.process_sender, ProcessCommand::SupervisorReady
         ].unwrap();
 
         ok!()
@@ -140,7 +162,8 @@ impl Supervisor {
 
                         send![
                             self.render_sender, RenderCommand::Shutdown,
-                            self.controller_sender, ControllerCommand::Shutdown
+                            self.controller_sender, ControllerCommand::Shutdown,
+                            self.process_sender, ProcessCommand::Shutdown
                         ].unwrap();
 
                         return ok!();
@@ -169,10 +192,15 @@ impl Supervisor {
             SupervisorCommand::ThreadFinished(ThreadSource::Controller) => ()
         ].unwrap();
 
+        wait![self.supervisor_receiver,
+            SupervisorCommand::ThreadFinished(ThreadSource::Process) => ()
+        ].unwrap();
+
         println!("S F");
         send![
             self.render_sender, RenderCommand::SupervisorFinished,
-            self.controller_sender, ControllerCommand::SupervisorFinished
+            self.controller_sender, ControllerCommand::SupervisorFinished,
+            self.process_sender, ProcessCommand::SupervisorFinished
         ];
 
         ok!()

@@ -1,16 +1,27 @@
+use glutin;
 
 use types::*;
 
+use glutin::EventsLoop;
+
+use supervisor::SupervisorSender;
+use render::RenderSender;
+use controller::ControllerSender;
+
 pub enum ProcessCommand {
-    RenderThreadCrash(ThreadSource),
+    ThreadCrash(ThreadSource),
 
-    RenderSetupError,
-    RenderIsReady,
-    RenderFinished,
+    SupervisorSender(SupervisorSender),
+    RenderSender(RenderSender),
+    ControllerSender(ControllerSender),
 
-    ControllerSetupError,
-    ControllerIsReady,
-    ControllerFinished,
+    EventsLoop(EventsLoop),
 
-    Quit
+    SupervisorReady,
+    SupervisorFinished,
+
+    Tick,
+    Shutdown,
+
+    ResourcesLoaded,
 }

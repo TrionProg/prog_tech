@@ -6,12 +6,14 @@ use glutin::EventsLoop;
 
 use supervisor::SupervisorSender;
 use render::RenderSender;
+use process::ProcessSender;
 
 pub enum ControllerCommand {
     ThreadCrash(ThreadSource),
 
     SupervisorSender(SupervisorSender),
     RenderSender(RenderSender),
+    ProcessSender(ProcessSender),
 
     EventsLoop(EventsLoop),
 

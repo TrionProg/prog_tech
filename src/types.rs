@@ -14,7 +14,7 @@ pub use storage::{ObjectMeshID, ObjectLodID};
 pub enum ThreadSource{
     Supervisor=0,
     Render=1,
-    //Process=2,
+    Process=2,
     Controller=3,
     Algorithm=4
 }
@@ -24,7 +24,7 @@ impl std::fmt::Display for ThreadSource{
         match *self{
             ThreadSource::Supervisor => write!(f, "Supervisor"),
             ThreadSource::Render => write!(f, "Render"),
-            //ThreadSource::Process => write!(f, "Process"),
+            ThreadSource::Process => write!(f, "Process"),
             ThreadSource::Controller => write!(f, "Controller"),
             ThreadSource::Algorithm => write!(f, "Algorithm"),
         }

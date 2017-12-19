@@ -1,4 +1,5 @@
 use std;
+use glutin;
 use nes::{ErrorInfo,ErrorInfoTrait};
 use reactor;
 
@@ -7,10 +8,17 @@ use types::*;
 use std::thread;
 use std::thread::JoinHandle;
 
+use supervisor;
+use supervisor::SupervisorSender;
+use supervisor::SupervisorCommand;
+
 use render;
 use render::RenderSender;
 use render::RenderCommand;
-use render::StorageSender;
+
+use controller;
+use controller::ControllerSender;
+use controller::ControllerCommand;
 
 use ::Storage;
 
@@ -22,67 +30,95 @@ pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
 
 pub struct Process {
     process_receiver:ProcessReceiver,
+    supervisor_sender:SupervisorSender,
     render_sender:RenderSender,
+    controller_sender:ControllerSender,
+
     storage:Storage
 }
 
-impl Process {
-    pub fn run() -> JoinHandle<()> {
-        let (process_sender, process_receiver) = reactor::create_channel(ThreadSource::Process);
+impl Process{
+    pub fn run()-> (JoinHandle<()>, ProcessSender) {
+        let (process_sender, mut process_receiver) = reactor::create_channel(ThreadSource::Process);
 
         let join_handle=thread::Builder::new().name("Process".to_string()).spawn(move|| {
-            send![
-                render_sender, RenderCommand::ProcessSender(process_sender.clone())
-            ].unwrap();
+            let (mut supervisor_sender, mut render_sender, mut controller_sender) = Self::get_senders(&mut process_receiver).unwrap();
 
-            let storage=Storage::new(storage_sender);
+            println!("p1");
 
-            let mut process=match Self::setup(process_receiver, render_sender.clone(), storage) {
+            let storage=Storage::new(render_sender.clone());
+
+            println!("p2");
+
+            let mut process=match Self::setup(
+                process_receiver,
+                supervisor_sender.clone(),
+                render_sender.clone(),
+                controller_sender.clone(),
+
+                storage
+            ) {
                 Ok(process) => process,
                 Err(error) => {
                     println!("Process setup error: {}", error);
 
                     send![
-                        render_sender, RenderCommand::ProcessSetupError
+                        supervisor_sender, SupervisorCommand::ThreadCrash(ThreadSource::Process),
+                        render_sender, RenderCommand::ThreadCrash(ThreadSource::Process),
+                        controller_sender, ControllerCommand::ThreadCrash(ThreadSource::Process)
                     ].unwrap();
 
                     return;
                 }
             };
 
+            println!("p3");
+
             process.synchronize_setup().unwrap();
+
+            println!("p4");
 
             match process.lifecycle() {
                 Ok(_) => {
                     //do something
 
+                    println!("C5");
+
                     process.synchronize_finish().unwrap();
                 }
                 Err(error) => {
-                    println!("Process Error: {}", error);
+                    println!("Process Error: {}!", error);
 
-                    match error {
-                        Error::RenderThreadCrash(_,source) => {
+                    match error {//TODO BrockenChannel
+                        Error::ThreadCrash(_,thread) => {
                             /*
-                            if source==ThreadSource::Process {
-                                try_send![storage.disk_sender, DiskCommand::IpcListenerThreadCrash(source)];
+                            if source==ThreadSource::Disk {
+                                try_send![disk.storage_sender, StorageCommand::IpcListenerThreadCrash(source)];
                             }
                             */
-                        }
+                        },
                         _ => {
                             send![
-                                process.render_sender, RenderCommand::ProcessThreadCrash(ThreadSource::Process)
+                                process.supervisor_sender, SupervisorCommand::ThreadCrash(ThreadSource::Process),
+                                process.render_sender, RenderCommand::ThreadCrash(ThreadSource::Process),
+                                process.controller_sender, ControllerCommand::ThreadCrash(ThreadSource::Process)
                             ].unwrap();
                         }
                     }
                 }
             }
+
+            println!("C6");
         }).unwrap();
 
-        (join_handle
+        (join_handle, process_sender)
     }
 
-    fn get_senders(receiver:&mut RenderReceiver) -> Result<(RenderSender, ControllerSender),Error> {
+    fn get_senders(receiver:&mut ProcessReceiver) -> Result<(SupervisorSender,RenderSender,ControllerSender),Error> {
+        let supervisor_sender=wait![receiver,
+            ProcessCommand::SupervisorSender(supervisor_sender) => supervisor_sender
+        ].unwrap();
+
         let render_sender=wait![receiver,
             ProcessCommand::RenderSender(render_sender) => render_sender
         ].unwrap();
@@ -91,13 +127,23 @@ impl Process {
             ProcessCommand::ControllerSender(controller_sender) => controller_sender
         ].unwrap();
 
-        ok!((process_sender, controller_sender))
+        ok!((supervisor_sender,render_sender,controller_sender))
     }
 
-    fn setup(process_receiver:ProcessReceiver, render_sender:RenderSender, storage:Storage) -> Result<Self,Error> {
+    fn setup(
+        process_receiver:ProcessReceiver,
+        supervisor_sender:SupervisorSender,
+        render_sender:RenderSender,
+        controller_sender:ControllerSender,
+
+        storage:Storage
+    ) -> Result<Self,Error> {
         let process=Process {
             process_receiver,
+            supervisor_sender,
             render_sender,
+            controller_sender,
+
             storage
         };
 
@@ -105,62 +151,55 @@ impl Process {
     }
 
     fn synchronize_setup(&mut self) -> Result<(),Error>{
-        wait![self.process_receiver,
-            ProcessCommand::RenderIsReady => ()
-        ].unwrap();
+        try_send![self.supervisor_sender, SupervisorCommand::ThreadReady(ThreadSource::Process)];
 
         wait![self.process_receiver,
-            ProcessCommand::ControllerIsReady => ()
+            ProcessCommand::SupervisorReady => ()
         ].unwrap();
-
-        try_send![self.render_sender, RenderCommand::ProcessIsReady];
 
         ok!()
-        /*
-        let mut ipc_listener_is_ready=false;
-        let mut disk_is_ready=false;
-
-        for _ in 0..2 {
-            match self.storage_receiver.recv() {
-                Ok( StorageCommand::IpcListenerIsReady ) => ipc_listener_is_ready=true,
-                Ok( StorageCommand::DiskIsReady ) => disk_is_ready=true,
-                _ => recv_error!(StorageCommand::IpcListenerOrDiskIsReady),
-            }
-        }
-
-        if ipc_listener_is_ready && disk_is_ready {
-            try_send![self.ipc_listener_sender, IpcListenerCommand::StorageIsReady];
-            try_send![self.disk_sender, DiskCommand::StorageIsReady];
-        }else if !ipc_listener_is_ready{
-            recv_error!(StorageCommand::IpcListenerIsReady);
-        }else if !disk_is_ready{
-            recv_error!(StorageCommand::DiskIsReady);
-        }
-        */
-        /*
-        let mut render_is_ready=false;
-
-        for _ in 0..1 {
-            match self.process_receiver.recv() {
-                Ok( ProcessCommand::RenderIsReady ) => render_is_ready=true,
-                _ => recv_error!(ProcessCommand::RenderOrDiskIsReady),
-            }
-        }
-
-        if render_is_ready {
-            try_send![self.render_sender, RenderCommand::ProcessIsReady];
-        }
-        */
     }
 
     fn lifecycle(&mut self) -> Result<(),Error> {
-        self.lifecycle_process()?;
+        self.load_resources()?;
+        self.create_map()?;
+
+        loop {
+            if self.handle_process_commands()? {
+                println!("QUIT3");
+                return ok!();
+            }
+        }
+    }
+
+    fn handle_process_commands(&mut self) -> Result<bool,Error> {
+        loop {
+            match try_recv_block!(self.process_receiver) {
+                ProcessCommand::ThreadCrash(thread) => return err!(Error::ThreadCrash, thread),
+                ProcessCommand::Tick => return ok!(false),
+                ProcessCommand::Shutdown => return ok!(true),
+                _ => unreachable!()
+            }
+        }
+    }
+
+    fn synchronize_finish(&mut self) -> Result<(),Error>{
+        println!("C F1");
+        try_send![self.supervisor_sender, SupervisorCommand::ThreadFinished(ThreadSource::Process)];
+        println!("C F2");
+
+        wait![self.process_receiver,
+            ProcessCommand::SupervisorFinished => ()
+        ].unwrap();
+
+        println!("C F");
 
         ok!()
     }
 
-    fn lifecycle_process(&mut self) -> Result<(),Error> {
+    fn load_resources(&mut self) -> Result<(),Error>{
         use storage::{TextureStorage, MeshStorage, LodStorage};
+        use storage::RgbaTexture;
 
         use render::storage::ObjectMesh;
         use render::storage::ObjectVertex;
@@ -177,98 +216,23 @@ impl Process {
         use std::io::{Cursor};
         use image;
 
-        let mut buf = Vec::new();
-        let fullpath = "img.png";//&Path::new("img.png");//.join(&path);
-        let mut file = match File::open(&fullpath) {
-            Ok(file) => file,
-            Err(err) => {
-                panic!("Can`t open file '{}' ({})", fullpath, err);
-            },
-        };
-        let cursor=match file.read_to_end(&mut buf) {
-            Ok(_) => Cursor::new(buf),
-            Err(err) => {
-                panic!("Can`t read file '{}' ({})", fullpath, err);
-            },
-        };
-
-        let image_buffer = image::load(cursor, image::PNG).unwrap().to_rgba();
-
-        let texture_id=self.storage.load_texture(image_buffer).unwrap();
+        let texture_id=RgbaTexture::load("img.png", &self.storage)?;
         let mesh=ObjectMesh::new(
             lod_id,
             texture_id
         );
         let mesh_id=self.storage.load_mesh(mesh).unwrap();
 
-        loop {
-            loop {
-                let command = match try_recv!(self.process_receiver) {
-                    Some(command) => command,
-                    None => break,
-                };
-
-                match command {
-                    ProcessCommand::RenderThreadCrash(source) => return err!(Error::RenderThreadCrash, source),
-
-                    ProcessCommand::Quit => {
-                        try_send![self.render_sender, RenderCommand::Shutdown];
-                        return ok!();
-                    },
-                    _ => {},
-                }
-            }
-
-            thread::sleep(Duration::new(1,0));
-        }
-    }
-
-    fn synchronize_finish(&mut self) -> Result<(),Error>{
-        wait![self.process_receiver,
-            ProcessCommand::RenderFinished => ()
-        ].unwrap();
-
-        wait![self.process_receiver,
-            ProcessCommand::ControllerFinished => ()
-        ].unwrap();
-
-        try_send![self.render_sender, RenderCommand::ProcessFinished];
+        try_send![self.render_sender, RenderCommand::ResourcesReady];
 
         ok!()
-        /*
-        let mut ipc_listener_finished=false;
-        let mut disk_finished=false;
+    }
 
-        for _ in 0..2 {
-            match self.storage_receiver.recv() {
-                Ok( StorageCommand::IpcListenerFinished ) => ipc_listener_finished=true,
-                Ok( StorageCommand::DiskFinished ) => disk_finished=true,
-                _ => recv_error!(StorageCommand::IpcListenerOrDiskIsReady),
-            }
-        }
+    fn create_map(&mut self) -> Result<(),Error> {
+        wait![self.process_receiver,
+            ProcessCommand::ResourcesLoaded => ()
+        ].unwrap();
 
-        if ipc_listener_finished && disk_finished {
-            try_send![self.ipc_listener_sender, IpcListenerCommand::StorageFinished];
-            try_send![self.disk_sender, DiskCommand::StorageFinished];
-        }else if !ipc_listener_finished{
-            recv_error!(StorageCommand::IpcListenerIsReady);
-        }else if !disk_finished{
-            recv_error!(StorageCommand::DiskIsReady);
-        }
-        */
-        /*
-        let mut render_finished=false;
-
-        for _ in 0..1 {
-            match self.process_receiver.recv() {
-                Ok( ProcessCommand::RenderFinished ) => render_finished=true,
-                _ => recv_error!(ProcessCommand::RenderOrDiskIsReady),
-            }
-        }
-
-        if render_finished {
-            try_send![self.render_sender, RenderCommand::ProcessFinished];
-        }
-        */
+        ok!()
     }
 }

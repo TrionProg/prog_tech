@@ -21,4 +21,7 @@ pub use self::window::Window;
 pub mod storage;
 pub use self::storage::Storage;
 
+pub mod camera;
+pub use self::camera::Camera;
+
 pub mod pipelines;
