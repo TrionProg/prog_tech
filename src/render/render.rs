@@ -45,6 +45,8 @@ pub type DepthFormat = gfx::format::DepthStencil;
 pub type RenderTarget = gfx::handle::RenderTargetView<gfx_gl::Resources, ColorFormat>;
 pub type DepthStencil = gfx::handle::DepthStencilView<gfx_gl::Resources, DepthFormat>;
 
+pub use process::{Map,Tile};
+
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 
@@ -70,7 +72,8 @@ pub struct Render {
     //pub data: pipe::Data<gfx_gl::Resources>,
 
     resources_loaded:bool,
-    camera:CommonCamera
+    camera:CommonCamera,
+    map:Option<Map>,
 }
 
 impl Render{
@@ -210,7 +213,8 @@ impl Render{
             slots:Slots::new(),
 
             resources_loaded:false,
-            camera
+            camera,
+            map:None
         };
 
         ok!(render)
@@ -254,6 +258,15 @@ impl Render{
                     self.load_lod(load_lod)?,
                 RenderCommand::SetSlot(set_slot) =>
                     self.set_slot(set_slot)?,
+                RenderCommand::CreateMap =>
+                    self.map=Some(Map::new()),
+                RenderCommand::LoadTile(x,y,tile) => {
+                    match self.map {
+                        Some(ref mut map) => map.tiles[x][y]=tile,
+                        None => {}
+                    }
+                },
+
 
                 RenderCommand::ResourcesReady => {
                     self.resources_loaded=true;
@@ -284,6 +297,7 @@ impl Render{
 
     fn render_map(&mut self) -> Result<(),Error> {
         use cgmath::Matrix4;
+        use cgmath::Vector3;
         use storage::mesh::MeshID;
         use gfx::traits::FactoryExt;
         use gfx::Factory;
@@ -324,28 +338,95 @@ impl Render{
         let camera=self.camera.get_render_camera()?.unwrap();
         let final_matrix=camera.perspective_matrix * camera.camera_matrix;
 
-        let mesh_id=self.slots.wall_meshes[7];
-        let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
-        let lod=self.storage.object_lods.get(lod_id)?;
-        let texture_id=self.slots.terrain_textures[4];
-        let texture=self.storage.textures_rgba.get(texture_id)?;
+        match self.map {
+            Some(ref map) => {
+                for y in 1..17 {
+                    for x in 1..17 {
+                        match map.tiles[x][y] {
+                            Tile::Air => {},
+                            Tile::Floor(index) => {
+                                let mesh_id=self.slots.floor_mesh;
+                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
+                                let lod=self.storage.object_lods.get(lod_id)?;
+                                let texture_id=self.slots.terrain_textures[index];
+                                let texture=self.storage.textures_rgba.get(texture_id)?;
 
-        let camera=self.camera.get_render_camera()?.unwrap();
+                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
 
-        //let sampler = self.storage.gfx_factory.create_sampler_linear();
-        //let sampler_info=SamplerInfo::new(gfx::texture::FilterMethod::Bilinear, gfx::texture::WrapMode::Tile);
-        //let sampler = self.storage.gfx_factory.create_sampler(sampler_info);
+                                let data = super::pipelines::ObjectPipeline::Data {
+                                    basic_color: [1.0, 1.0, 1.0, 1.0],
+                                    final_matrix: final_matrix.into(),
+                                    tile_matrix: tile_matrix.into(),
+                                    vbuf: lod.vertex_buffer.clone(),
+                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+                                    out: self.render_target.clone(),
+                                    out_depth: self.depth_stencil.clone()
+                                };
 
-        let data = super::pipelines::ObjectPipeline::Data {
-            basic_color: [1.0, 1.0, 1.0, 1.0],
-            final_matrix: final_matrix.into(),
-            vbuf: lod.vertex_buffer.clone(),
-            texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-            out: self.render_target.clone(),
-            out_depth: self.depth_stencil.clone()
-        };
+                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                            }
+                            Tile::Wall(index) => {
+                                let r=if map.tiles[x+1][y].is_wall() {0}else{1<<0};
+                                let l=if map.tiles[x-1][y].is_wall() {0}else{1<<1};
+                                let f=if map.tiles[x][y+1].is_wall() {0}else{1<<2};
+                                let b=if map.tiles[x][y-1].is_wall() {0}else{1<<3};
 
-        self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                                let mask=r | l | f | b;
+
+                                let mesh_id=self.slots.wall_meshes[mask];
+                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
+                                let lod=self.storage.object_lods.get(lod_id)?;
+                                let texture_id=self.slots.terrain_textures[index];
+                                let texture=self.storage.textures_rgba.get(texture_id)?;
+
+                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
+
+                                let data = super::pipelines::ObjectPipeline::Data {
+                                    basic_color: [1.0, 1.0, 1.0, 1.0],
+                                    final_matrix: final_matrix.into(),
+                                    tile_matrix: tile_matrix.into(),
+                                    vbuf: lod.vertex_buffer.clone(),
+                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+                                    out: self.render_target.clone(),
+                                    out_depth: self.depth_stencil.clone()
+                                };
+
+                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                            },
+                            Tile::Hole(index) => {
+                                let r=if map.tiles[x+1][y].is_hole() {0}else{1<<0};
+                                let l=if map.tiles[x-1][y].is_hole() {0}else{1<<1};
+                                let f=if map.tiles[x][y+1].is_hole() {0}else{1<<2};
+                                let b=if map.tiles[x][y-1].is_hole() {0}else{1<<3};
+
+                                let mask=r | l | f | b;
+
+                                let mesh_id=self.slots.hole_meshes[mask];
+                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
+                                let lod=self.storage.object_lods.get(lod_id)?;
+                                let texture_id=self.slots.terrain_textures[index];
+                                let texture=self.storage.textures_rgba.get(texture_id)?;
+
+                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
+
+                                let data = super::pipelines::ObjectPipeline::Data {
+                                    basic_color: [1.0, 1.0, 1.0, 1.0],
+                                    final_matrix: final_matrix.into(),
+                                    tile_matrix: tile_matrix.into(),
+                                    vbuf: lod.vertex_buffer.clone(),
+                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+                                    out: self.render_target.clone(),
+                                    out_depth: self.depth_stencil.clone()
+                                };
+
+                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                            },
+                        }
+                    }
+                }
+            },
+            None => {},
+        }
 
         ok!()
     }
@@ -393,6 +474,8 @@ impl Render{
                 self.slots.floor_mesh=mesh_id,
             SetSlot::WallMesh(index, mesh_id) =>
                 self.slots.wall_meshes[index]=mesh_id,
+            SetSlot::HoleMesh(index, mesh_id) =>
+                self.slots.hole_meshes[index]=mesh_id,
         }
 
         ok!()

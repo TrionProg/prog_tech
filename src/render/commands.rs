@@ -9,6 +9,8 @@ use render::storage::{ObjectMesh,TerrainMesh};
 use render::pipelines::ObjectVertex;
 use::Camera;
 
+use process::Tile;
+
 pub enum RenderCommand {
     ThreadCrash(ThreadSource),
 
@@ -31,6 +33,8 @@ pub enum RenderCommand {
     SetSlot(SetSlot),
 
     ResourcesReady,
+    CreateMap,
+    LoadTile(usize, usize, Tile)
 }
 
 pub enum LoadTexture {
@@ -67,7 +71,8 @@ impl Into<RenderCommand> for LoadLod {
 pub enum SetSlot {
     TerrainTexture(usize, RgbaTextureID),
     FloorMesh(TerrainMeshID),
-    WallMesh(usize,TerrainMeshID)
+    WallMesh(usize,TerrainMeshID),
+    HoleMesh(usize,TerrainMeshID),
 }
 
 impl Into<RenderCommand> for SetSlot {

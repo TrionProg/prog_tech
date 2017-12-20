@@ -24,6 +24,8 @@ use ::Storage;
 
 use super::Error;
 use super::ProcessCommand;
+use super::Map;
+use super::Tile;
 
 pub type ProcessSender = reactor::Sender<ThreadSource,ProcessCommand>;
 pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
@@ -34,7 +36,8 @@ pub struct Process {
     render_sender:RenderSender,
     controller_sender:ControllerSender,
 
-    storage:Storage
+    storage:Storage,
+    map:Option<Map>
 }
 
 impl Process{
@@ -144,7 +147,8 @@ impl Process{
             render_sender,
             controller_sender,
 
-            storage
+            storage,
+            map:None
         };
 
         ok!(process)
@@ -226,7 +230,9 @@ impl Process{
         use image;
 
         self.load_textures()?;
+        self.load_floor()?;
         self.load_walls()?;
+        self.load_holes()?;
 
 
         try_send![self.render_sender, RenderCommand::ResourcesReady];
@@ -245,6 +251,38 @@ impl Process{
 
             try_send![self.render_sender, SetSlot::TerrainTexture(i,texture_id).into()];
         }
+
+        ok!()
+    }
+
+    fn load_floor(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::{MeshStorage, LodStorage};
+
+        use render::storage::TerrainMesh;
+        use render::storage::ObjectVertex;
+
+        let mut buffer=Vec::with_capacity(1*6);
+
+        let top=[
+            ObjectVertex::new([0, 0,  0], [0, 0]),
+            ObjectVertex::new([ 1, 0,  0], [1, 0]),
+            ObjectVertex::new([ 1,  1,  0], [1, 1]),
+            ObjectVertex::new([ 1,  1,  0], [1, 1]),
+            ObjectVertex::new([0,  1,  0], [0, 1]),
+            ObjectVertex::new([0, 0,  0], [0, 0]),
+        ];
+
+        buffer.extend_from_slice(&top);
+
+        let lod_id=self.storage.load_lod(buffer).unwrap();
+        let mesh=TerrainMesh::new(
+            lod_id
+        );
+
+        let mesh_id=self.storage.load_mesh(mesh)?;
+
+        try_send![self.render_sender, SetSlot::FloorMesh(mesh_id).into()];
 
         ok!()
     }
@@ -335,10 +373,146 @@ impl Process{
         ok!()
     }
 
+    fn load_holes(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::{MeshStorage, LodStorage};
+
+        use render::storage::TerrainMesh;
+        use render::storage::ObjectVertex;
+
+        for i in 0..16 {
+            let mut buffer=Vec::with_capacity(6*6);
+
+            let top=[
+                ObjectVertex::new([0, 0,  -2], [0, 0]),
+                ObjectVertex::new([ 1, 0,  -2], [1, 0]),
+                ObjectVertex::new([ 1,  1,  -2], [1, 1]),
+                ObjectVertex::new([ 1,  1,  -2], [1, 1]),
+                ObjectVertex::new([0,  1,  -2], [0, 1]),
+                ObjectVertex::new([0, 0,  -2], [0, 0]),
+            ];
+
+            let right=[
+                ObjectVertex::new([ 1, 0, -2], [0, 0]),
+                ObjectVertex::new([ 1,  1, -2], [1, 0]),
+                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
+                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
+                ObjectVertex::new([ 1, 0,  2-2], [0, 2]),
+                ObjectVertex::new([ 1, 0, 0-2], [0, 0]),
+            ];
+
+            let left=[
+                ObjectVertex::new([0, 0,  2-2], [1, 0]),
+                ObjectVertex::new([0,  1,  2-2], [0, 0]),
+                ObjectVertex::new([0,  1, 0-2], [0, 2]),
+                ObjectVertex::new([0,  1, 0-2], [0, 2]),
+                ObjectVertex::new([0, 0, 0-2], [1, 2]),
+                ObjectVertex::new([0, 0,  2-2], [1, 0]),
+            ];
+
+            let front=[
+                ObjectVertex::new([ 1,  1, 0-2], [1, 0]),
+                ObjectVertex::new([0,  1, 0-2], [0, 0]),
+                ObjectVertex::new([0,  1,  2-2], [0, 2]),
+                ObjectVertex::new([0,  1,  2-2], [0, 2]),
+                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
+                ObjectVertex::new([ 1,  1, 0-2], [1, 0]),
+            ];
+
+            let back=[
+                ObjectVertex::new([ 1, 0,  2-2], [0, 0]),
+                ObjectVertex::new([0, 0,  2-2], [1, 0]),
+                ObjectVertex::new([0, 0, 0-2], [1, 2]),
+                ObjectVertex::new([0, 0, 0-2], [1, 2]),
+                ObjectVertex::new([ 1, 0, 0-2], [0, 2]),
+                ObjectVertex::new([ 1, 0,  2-2], [0, 0]),
+            ];
+
+            buffer.extend_from_slice(&top);
+
+            if (i & 1) >0 {
+                buffer.extend_from_slice(&right);
+            }
+
+            if (i & 1<<1) >0 {
+                buffer.extend_from_slice(&left);
+            }
+
+            if (i & 1<<2) >0 {
+                buffer.extend_from_slice(&front);
+            }
+
+            if (i & 1<<3) >0 {
+                buffer.extend_from_slice(&back);
+            }
+
+            let lod_id=self.storage.load_lod(buffer).unwrap();
+            let mesh=TerrainMesh::new(
+                lod_id
+            );
+
+            let mesh_id=self.storage.load_mesh(mesh)?;
+
+            try_send![self.render_sender, SetSlot::HoleMesh(i,mesh_id).into()];
+        }
+
+        ok!()
+    }
+
     fn create_map(&mut self) -> Result<(),Error> {
+        use std::io::{BufReader,BufRead};
+        use std::fs::File;
+
         wait![self.process_receiver,
             ProcessCommand::ResourcesLoaded => ()
         ].unwrap();
+
+        let f = File::open("map.txt").unwrap();
+        let mut reader = BufReader::new(f);
+
+        let mut map=Map::new();
+
+        for (y,line_res) in reader.lines().enumerate() {
+            let line=match line_res{
+                Ok(line) => line,
+                Err(_) => break
+            };
+
+            let chars:Vec<char>=line.chars().collect();
+
+            for x in 0..16 {
+                let index=match chars[x*2+1] {
+                    '0' => 0,
+                    '1' => 1,
+                    '2' => 2,
+                    '3' => 3,
+                    '4' => 4,
+                    _ => 0
+                };
+
+                if index>4 {
+                    panic!("{} {}",x,y);
+                }
+
+                let tile=match chars[x*2] {
+                    'w' => Tile::Wall(index),
+                    'f' => Tile::Floor(index),
+                    'h' => Tile::Hole(index),
+                    _ => Tile::Air,
+                };
+
+                map.tiles[y+1][x+1]=tile;
+            }
+        }
+
+        //self.map=Some(map);
+        try_send![self.render_sender, RenderCommand::CreateMap];
+
+        for y in 0..16 {
+            for x in 0..16 {
+                try_send![self.render_sender, RenderCommand::LoadTile(x+1,y+1,map.tiles[x+1][y+1]) ];
+            }
+        }
 
         ok!()
     }

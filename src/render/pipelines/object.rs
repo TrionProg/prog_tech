@@ -37,6 +37,7 @@ gfx_defines!{
     pipeline ObjectPipeline {
         basic_color: gfx::Global<[f32; 4]> = "u_basic_color",
         final_matrix: gfx::Global<[[f32; 4]; 4]> = "u_final_matrix",
+        tile_matrix: gfx::Global<[[f32; 4]; 4]> = "u_tile_matrix",
         vbuf: gfx::VertexBuffer<ObjectVertex> = (),
         texture: gfx::TextureSampler<[f32; 4]> = "t_tex",
         out: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),

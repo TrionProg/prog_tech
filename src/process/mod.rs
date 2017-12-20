@@ -7,3 +7,6 @@ pub use self::process::{Process, ProcessSender};
 
 pub mod commands;
 pub use self::commands::ProcessCommand;
+
+pub mod map;
+pub use self::map::{Map,Tile};
