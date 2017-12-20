@@ -510,6 +510,7 @@ impl Process{
 
         for y in 0..16 {
             for x in 0..16 {
+                thread::sleep_ms(10);
                 try_send![self.render_sender, RenderCommand::LoadTile(x+1,y+1,map.tiles[x+1][y+1]) ];
             }
         }

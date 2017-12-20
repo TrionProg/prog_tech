@@ -185,7 +185,7 @@ impl Render{
         camera:CommonCamera
     ) -> Result<Self,Error> {
         let window_config = glutin::WindowBuilder::new()
-            .with_title("Triangle example".to_string())
+            .with_title("ProgrammierungTechnologie".to_string())
             .with_dimensions(1024, 768);
         let context = glutin::ContextBuilder::new()
             .with_vsync(true);

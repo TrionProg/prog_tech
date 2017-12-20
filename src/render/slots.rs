@@ -5,6 +5,8 @@ use object_pool::growable::ID;
 use storage::{TextureID,MeshID};
 
 pub struct Slots {
+    //pub loading_texture:RgbaTextureID,
+    //pub loading_mesh:TerrainMeshID,
     pub terrain_textures:Vec<RgbaTextureID>,
     pub floor_mesh:TerrainMeshID,
     pub wall_meshes:Vec<TerrainMeshID>,
