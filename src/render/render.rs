@@ -32,8 +32,9 @@ use ::Camera as CommonCamera;
 use super::Error;
 use super::Window;
 use super::Storage;
+use super::Slots;
 use super::RenderCommand;
-use super::{LoadTexture, LoadMesh, LoadLod};
+use super::{LoadTexture, LoadMesh, LoadLod, SetSlot};
 
 pub type RenderSender = reactor::Sender<ThreadSource,RenderCommand>;
 pub type RenderReceiver = reactor::Receiver<ThreadSource,RenderCommand>;
@@ -64,6 +65,7 @@ pub struct Render {
     //pub pso: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
     //pso_wire: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
     storage: Storage,
+    slots: Slots,
     //font: rusttype::Font<'static>,
     //pub data: pipe::Data<gfx_gl::Resources>,
 
@@ -205,6 +207,7 @@ impl Render{
             gfx_device,
             encoder,
             storage,
+            slots:Slots::new(),
 
             resources_loaded:false,
             camera
@@ -249,6 +252,8 @@ impl Render{
                     self.load_mesh(load_mesh)?,
                 RenderCommand::LoadLod(load_lod) =>
                     self.load_lod(load_lod)?,
+                RenderCommand::SetSlot(set_slot) =>
+                    self.set_slot(set_slot)?,
 
                 RenderCommand::ResourcesReady => {
                     self.resources_loaded=true;
@@ -281,8 +286,12 @@ impl Render{
         use cgmath::Matrix4;
         use storage::mesh::MeshID;
         use gfx::traits::FactoryExt;
+        use gfx::Factory;
         use object_pool::growable::ID;
         use cgmath::SquareMatrix;
+        use gfx::texture::SamplerInfo;
+
+        /*
 
         let (lod_id,texture_id)={
             let mesh=self.storage.object_meshes.get(ObjectMeshID::new(ID::new(0)))?;
@@ -310,6 +319,34 @@ impl Render{
 
         self.encoder.draw(&lod.slice, &self.storage.object_pso, &data);
 
+        */
+
+        let camera=self.camera.get_render_camera()?.unwrap();
+        let final_matrix=camera.perspective_matrix * camera.camera_matrix;
+
+        let mesh_id=self.slots.wall_meshes[7];
+        let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
+        let lod=self.storage.object_lods.get(lod_id)?;
+        let texture_id=self.slots.terrain_textures[4];
+        let texture=self.storage.textures_rgba.get(texture_id)?;
+
+        let camera=self.camera.get_render_camera()?.unwrap();
+
+        //let sampler = self.storage.gfx_factory.create_sampler_linear();
+        //let sampler_info=SamplerInfo::new(gfx::texture::FilterMethod::Bilinear, gfx::texture::WrapMode::Tile);
+        //let sampler = self.storage.gfx_factory.create_sampler(sampler_info);
+
+        let data = super::pipelines::ObjectPipeline::Data {
+            basic_color: [1.0, 1.0, 1.0, 1.0],
+            final_matrix: final_matrix.into(),
+            vbuf: lod.vertex_buffer.clone(),
+            texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+            out: self.render_target.clone(),
+            out_depth: self.depth_stencil.clone()
+        };
+
+        self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+
         ok!()
     }
 
@@ -332,8 +369,10 @@ impl Render{
         use super::storage::MeshStorage;
 
         match load_mesh {
-            LoadMesh::Object(object_mesh, mesh_id) =>
-                self.storage.load_mesh(object_mesh, mesh_id)
+            LoadMesh::Object(mesh, mesh_id) =>
+                self.storage.load_mesh(mesh, mesh_id),
+            LoadMesh::Terrain(mesh, mesh_id) =>
+                self.storage.load_mesh(mesh, mesh_id)
         }
     }
 
@@ -344,6 +383,19 @@ impl Render{
             LoadLod::Object(vertex_buffer, lod_id) =>
                 self.storage.load_lod(vertex_buffer, lod_id)
         }
+    }
+
+    fn set_slot(&mut self, set_slot:SetSlot) -> Result<(),Error> {
+        match set_slot {
+            SetSlot::TerrainTexture(index, texture_id) =>
+                self.slots.terrain_textures[index]=texture_id,
+            SetSlot::FloorMesh(mesh_id) =>
+                self.slots.floor_mesh=mesh_id,
+            SetSlot::WallMesh(index, mesh_id) =>
+                self.slots.wall_meshes[index]=mesh_id,
+        }
+
+        ok!()
     }
 
     fn synchronize_finish(&mut self) -> Result<(),Error>{

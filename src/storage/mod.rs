@@ -11,7 +11,7 @@ pub use self::texture::TextureID;
 pub use self::texture::{RgbaTexture, RgbaTextureID};
 
 pub mod mesh;
-pub use self::mesh::{MeshID, ObjectMeshID};
+pub use self::mesh::{MeshID, ObjectMeshID, TerrainMeshID};
 
 pub mod lod;
 pub use self::lod::{LodID, ObjectLodID};

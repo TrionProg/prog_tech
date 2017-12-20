@@ -7,7 +7,7 @@ pub use self::texture::Texture;
 pub use self::texture::RgbaTexture;
 
 pub mod mesh;
-pub use self::mesh::ObjectMesh;
+pub use self::mesh::{ObjectMesh,TerrainMesh};
 
 pub mod lod;
 pub use self::lod::ObjectLod;

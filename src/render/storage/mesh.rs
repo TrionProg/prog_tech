@@ -24,3 +24,19 @@ impl ObjectMesh {
 }
 
 impl Mesh for ObjectMesh{}
+
+
+
+pub struct TerrainMesh {
+    pub lod:ObjectLodID,
+}
+
+impl TerrainMesh {
+    pub fn new(lod:ObjectLodID) -> Self {
+        TerrainMesh {
+            lod
+        }
+    }
+}
+
+impl Mesh for TerrainMesh{}

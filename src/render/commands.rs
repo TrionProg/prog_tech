@@ -5,7 +5,7 @@ use supervisor::SupervisorSender;
 use controller::ControllerSender;
 use process::ProcessSender;
 
-use render::storage::ObjectMesh;
+use render::storage::{ObjectMesh,TerrainMesh};
 use render::pipelines::ObjectVertex;
 use::Camera;
 
@@ -28,6 +28,7 @@ pub enum RenderCommand {
     LoadTexture(LoadTexture),
     LoadMesh(LoadMesh),
     LoadLod(LoadLod),
+    SetSlot(SetSlot),
 
     ResourcesReady,
 }
@@ -44,6 +45,7 @@ impl Into<RenderCommand> for LoadTexture {
 
 pub enum LoadMesh {
     Object(ObjectMesh, ObjectMeshID),
+    Terrain(TerrainMesh, TerrainMeshID),
 }
 
 impl Into<RenderCommand> for LoadMesh {
@@ -59,5 +61,17 @@ pub enum LoadLod {
 impl Into<RenderCommand> for LoadLod {
     fn into(self) -> RenderCommand {
         RenderCommand::LoadLod(self)
+    }
+}
+
+pub enum SetSlot {
+    TerrainTexture(usize, RgbaTextureID),
+    FloorMesh(TerrainMeshID),
+    WallMesh(usize,TerrainMeshID)
+}
+
+impl Into<RenderCommand> for SetSlot {
+    fn into(self) -> RenderCommand {
+        RenderCommand::SetSlot(self)
     }
 }

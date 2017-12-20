@@ -9,6 +9,7 @@ pub type TextureData=Vec<u8>;
 pub use image::{GrayImage, GrayAlphaImage, RgbImage, RgbaImage};
 pub use storage::{RgbaTextureID};
 pub use storage::{ObjectMeshID, ObjectLodID};
+pub use storage::{TerrainMeshID};
 
 #[derive(Debug,Copy,Clone,Eq,PartialEq)]
 pub enum ThreadSource{

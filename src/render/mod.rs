@@ -8,7 +8,7 @@ pub use self::render::{RenderTarget,DepthStencil};
 
 pub mod commands;
 pub use self::commands::RenderCommand;
-pub use self::commands::{LoadTexture, LoadMesh, LoadLod};
+pub use self::commands::{LoadTexture, LoadMesh, LoadLod, SetSlot};
 
 pub mod scheduler;
 pub use self::scheduler::Scheduler;
@@ -23,5 +23,8 @@ pub use self::storage::Storage;
 
 pub mod camera;
 pub use self::camera::Camera;
+
+pub mod slots;
+pub use self::slots::Slots;
 
 pub mod pipelines;

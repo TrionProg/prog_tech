@@ -44,6 +44,7 @@ pub struct Storage {
     pub textures_rgba:InnerTextureStorage<RgbaTextureID, RgbaImage, RgbaTexture>,
 
     pub object_meshes:InnerMeshStorage<ObjectMeshID,ObjectMesh>,
+    pub terrain_meshes:InnerMeshStorage<TerrainMeshID,TerrainMesh>,
 
     pub object_lods:InnerLodStorage<ObjectLodID,ObjectVertex,ObjectLod>
 }
@@ -60,6 +61,7 @@ impl Storage {
             textures_rgba:InnerTextureStorage::new(&gfx_factory),
 
             object_meshes:InnerMeshStorage::new(),
+            terrain_meshes:InnerMeshStorage::new(),
 
             object_lods:InnerLodStorage::new(&gfx_factory),
         };
@@ -190,6 +192,16 @@ impl MeshStorage<ObjectMeshID, ObjectMesh> for Storage {
 
     fn delete_mesh(&mut self, mesh_id:ObjectMeshID) -> Result<(),Error> {
         self.object_meshes.delete(mesh_id)
+    }
+}
+
+impl MeshStorage<TerrainMeshID, TerrainMesh> for Storage {
+    fn load_mesh(&mut self, mesh:TerrainMesh, mesh_id:TerrainMeshID) -> Result<(),Error> {
+        self.terrain_meshes.load(mesh, mesh_id)
+    }
+
+    fn delete_mesh(&mut self, mesh_id:TerrainMeshID) -> Result<(),Error> {
+        self.terrain_meshes.delete(mesh_id)
     }
 }
 

@@ -201,6 +201,8 @@ impl Process{
         use storage::{TextureStorage, MeshStorage, LodStorage};
         use storage::RgbaTexture;
 
+        use render::SetSlot;
+
         use render::storage::ObjectMesh;
         use render::storage::ObjectVertex;
 
@@ -211,11 +213,6 @@ impl Process{
         ];
         let lod_id=self.storage.load_lod(vertex_buffer).unwrap();
 
-        use std::fs::{File};
-        use std::io::{Read};
-        use std::io::{Cursor};
-        use image;
-
         let texture_id=RgbaTexture::load("img.png", &self.storage)?;
         let mesh=ObjectMesh::new(
             lod_id,
@@ -223,7 +220,117 @@ impl Process{
         );
         let mesh_id=self.storage.load_mesh(mesh).unwrap();
 
+        use std::fs::{File};
+        use std::io::{Read};
+        use std::io::{Cursor};
+        use image;
+
+        self.load_textures()?;
+        self.load_walls()?;
+
+
         try_send![self.render_sender, RenderCommand::ResourcesReady];
+
+        ok!()
+    }
+
+    fn load_textures(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::RgbaTexture;
+        use storage::TextureStorage;
+
+        for i in 0..5 {
+            let file_name=format!("textures/terrain{}.png",i);
+            let texture_id=RgbaTexture::load(file_name.as_str(), &self.storage)?;
+
+            try_send![self.render_sender, SetSlot::TerrainTexture(i,texture_id).into()];
+        }
+
+        ok!()
+    }
+
+    fn load_walls(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::{MeshStorage, LodStorage};
+
+        use render::storage::TerrainMesh;
+        use render::storage::ObjectVertex;
+
+        for i in 0..16 {
+            let mut buffer=Vec::with_capacity(6*6);
+
+            let top=[
+                ObjectVertex::new([0, 0,  2], [0, 0]),
+                ObjectVertex::new([ 1, 0,  2], [1, 0]),
+                ObjectVertex::new([ 1,  1,  2], [1, 1]),
+                ObjectVertex::new([ 1,  1,  2], [1, 1]),
+                ObjectVertex::new([0,  1,  2], [0, 1]),
+                ObjectVertex::new([0, 0,  2], [0, 0]),
+            ];
+
+            let right=[
+                ObjectVertex::new([ 1, 0, 0], [0, 0]),
+                ObjectVertex::new([ 1,  1, 0], [1, 0]),
+                ObjectVertex::new([ 1,  1,  2], [1, 2]),
+                ObjectVertex::new([ 1,  1,  2], [1, 2]),
+                ObjectVertex::new([ 1, 0,  2], [0, 2]),
+                ObjectVertex::new([ 1, 0, 0], [0, 0]),
+            ];
+
+            let left=[
+                ObjectVertex::new([0, 0,  2], [1, 0]),
+                ObjectVertex::new([0,  1,  2], [0, 0]),
+                ObjectVertex::new([0,  1, 0], [0, 2]),
+                ObjectVertex::new([0,  1, 0], [0, 2]),
+                ObjectVertex::new([0, 0, 0], [1, 2]),
+                ObjectVertex::new([0, 0,  2], [1, 0]),
+            ];
+
+            let front=[
+                ObjectVertex::new([ 1,  1, 0], [1, 0]),
+                ObjectVertex::new([0,  1, 0], [0, 0]),
+                ObjectVertex::new([0,  1,  2], [0, 2]),
+                ObjectVertex::new([0,  1,  2], [0, 2]),
+                ObjectVertex::new([ 1,  1,  2], [1, 2]),
+                ObjectVertex::new([ 1,  1, 0], [1, 0]),
+            ];
+
+            let back=[
+                ObjectVertex::new([ 1, 0,  2], [0, 0]),
+                ObjectVertex::new([0, 0,  2], [1, 0]),
+                ObjectVertex::new([0, 0, 0], [1, 2]),
+                ObjectVertex::new([0, 0, 0], [1, 2]),
+                ObjectVertex::new([ 1, 0, 0], [0, 2]),
+                ObjectVertex::new([ 1, 0,  2], [0, 0]),
+            ];
+
+            buffer.extend_from_slice(&top);
+
+            if (i & 1) >0 {
+                buffer.extend_from_slice(&right);
+            }
+
+            if (i & 1<<1) >0 {
+                buffer.extend_from_slice(&left);
+            }
+
+            if (i & 1<<2) >0 {
+                buffer.extend_from_slice(&front);
+            }
+
+            if (i & 1<<3) >0 {
+                buffer.extend_from_slice(&back);
+            }
+
+            let lod_id=self.storage.load_lod(buffer).unwrap();
+            let mesh=TerrainMesh::new(
+                lod_id
+            );
+
+            let mesh_id=self.storage.load_mesh(mesh)?;
+
+            try_send![self.render_sender, SetSlot::WallMesh(i,mesh_id).into()];
+        }
 
         ok!()
     }

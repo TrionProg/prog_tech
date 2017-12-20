@@ -14,7 +14,7 @@ use render::RenderSender;
 use render::{RenderCommand, LoadTexture, LoadMesh, LoadLod};
 
 use render::storage::ObjectVertex;
-use render::storage::ObjectMesh;
+use render::storage::{ObjectMesh,TerrainMesh};
 
 use super::Error;
 use super::{TextureID, MeshID, LodID};
@@ -47,6 +47,7 @@ struct InnerStorage {
     //textures_rgbaa:InnerTextureStorage<RgbaTextureID>,
 
     object_meshes:InnerMeshStorage<ObjectMeshID>,
+    terrain_meshes:InnerMeshStorage<TerrainMeshID>,
 
     object_lods:InnerLodStorage<ObjectLodID>
 }
@@ -59,6 +60,7 @@ impl InnerStorage {
             textures_rgba:InnerTextureStorage::new(),
 
             object_meshes:InnerMeshStorage::new(),
+            terrain_meshes:InnerMeshStorage::new(),
 
             object_lods:InnerLodStorage::new()
         }
@@ -168,6 +170,24 @@ impl MeshStorage<ObjectMeshID, ObjectMesh> for Storage {
     }
 
     fn delete_mesh(&self, mesh_id:ObjectMeshID) -> Result<(), Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        ok!()
+    }
+}
+
+impl MeshStorage<TerrainMeshID, TerrainMesh> for Storage {
+    fn load_mesh(&self, mesh:TerrainMesh) -> Result<TerrainMeshID, Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        let mesh_id=storage.terrain_meshes.insert();
+
+        try_send!(storage.render_sender, LoadMesh::Terrain(mesh, mesh_id.clone()).into());
+
+        ok!(mesh_id)
+    }
+
+    fn delete_mesh(&self, mesh_id:TerrainMeshID) -> Result<(), Error> {
         mutex_lock!(&self.inner => storage, Error);
 
         ok!()
