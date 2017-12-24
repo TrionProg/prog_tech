@@ -2,7 +2,9 @@ use glutin;
 use glutin::Event;
 use glutin::ElementState;
 use glutin::MouseButton;
+use glutin::VirtualKeyCode;
 
+use consts::*;
 
 pub struct Input{
     pub mouse_x:Option<i32>,
@@ -13,6 +15,8 @@ pub struct Input{
     pub left_mouse_button:ElementState,
     pub middle_mouse_button:ElementState,
     pub right_mouse_button:ElementState,
+
+    pub key_states:[ElementState;KEY_LIMIT],
 }
 
 impl Input{
@@ -26,6 +30,8 @@ impl Input{
             left_mouse_button:ElementState::Released,
             middle_mouse_button:ElementState::Released,
             right_mouse_button:ElementState::Released,
+
+            key_states:[ElementState::Released;KEY_LIMIT],
         }
     }
 
@@ -44,13 +50,21 @@ impl Input{
         self.mouse_y = Some(y);
     }
 
-    pub fn on_mouse_button(&mut self, state:ElementState, button:MouseButton){
+    pub fn on_mouse_button(&mut self, button:MouseButton, state:ElementState){
         match button{
             MouseButton::Left => self.left_mouse_button=state,
             MouseButton::Middle => self.middle_mouse_button=state,
             MouseButton::Right => self.right_mouse_button=state,
             MouseButton::Other(_) => {},
         }
+    }
+
+    pub fn on_key(&mut self, key:VirtualKeyCode, state:ElementState){
+        self.key_states[key as usize]=state;
+    }
+
+    pub fn key(&self, key:VirtualKeyCode) -> ElementState {
+        self.key_states[key as usize]
     }
 }
 

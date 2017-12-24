@@ -1,3 +1,4 @@
+use consts::MAP_SIZE;
 
 #[derive(Clone,Copy)]
 pub enum Tile {
@@ -8,13 +9,13 @@ pub enum Tile {
 }
 
 pub struct Map {
-    pub tiles:[[Tile;18];18]
+    pub tiles:[[Tile;MAP_SIZE];MAP_SIZE]
 }
 
 impl Map {
     pub fn new() -> Self {
         Map {
-            tiles:[[Tile::Air;18];18]
+            tiles:[[Tile::Air;MAP_SIZE];MAP_SIZE]
         }
     }
 }

@@ -254,12 +254,12 @@ impl Process{
         let mut buffer=Vec::with_capacity(1*6);
 
         let top=[
-            ObjectVertex{ pos:[-1.0, 0.1, -1.0], uv:[0.0, 0.0]},
-            ObjectVertex{ pos:[ 1.0, 0.1, -1.0], uv:[1.0, 0.0]},
-            ObjectVertex{ pos:[ 1.0, 0.1,  1.0], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[ 1.0, 0.1,  1.0], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[-1.0, 0.1,  1.0], uv:[0.0, 1.0]},
-            ObjectVertex{ pos:[-1.0, 0.1, -1.0], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[0.0, 0.1, 0.0], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[2.0, 0.1, 0.0], uv:[1.0, 0.0]},
+            ObjectVertex{ pos:[2.0, 0.1, 2.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[2.0, 0.1, 2.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.0, 0.1, 2.0], uv:[0.0, 1.0]},
+            ObjectVertex{ pos:[0.0, 0.1, 0.0], uv:[0.0, 0.0]},
         ];
 
         buffer.extend_from_slice(&top);
@@ -381,30 +381,30 @@ impl Process{
             ];
 
             let right=[
-                ObjectVertex::new([ 1, 0, 0], [0, 0]),
-                ObjectVertex::new([ 1,  1, 0], [1, 0]),
-                ObjectVertex::new([ 1,  1,  2], [1, 2]),
-                ObjectVertex::new([ 1,  1,  2], [1, 2]),
-                ObjectVertex::new([ 1, 0,  2], [0, 2]),
-                ObjectVertex::new([ 1, 0, 0], [0, 0]),
+                ObjectVertex::new([1, 0,  2], [1, 0]),
+                ObjectVertex::new([1,  1,  2], [0, 0]),
+                ObjectVertex::new([1,  1, 0], [0, 2]),
+                ObjectVertex::new([1,  1, 0], [0, 2]),
+                ObjectVertex::new([1, 0, 0], [1, 2]),
+                ObjectVertex::new([1, 0,  2], [1, 0]),
             ];
 
             let left=[
-                ObjectVertex::new([0, 0,  2], [1, 0]),
-                ObjectVertex::new([0,  1,  2], [0, 0]),
-                ObjectVertex::new([0,  1, 0], [0, 2]),
-                ObjectVertex::new([0,  1, 0], [0, 2]),
-                ObjectVertex::new([0, 0, 0], [1, 2]),
-                ObjectVertex::new([0, 0,  2], [1, 0]),
+                ObjectVertex::new([0, 1, 2], [1, 0]),
+                ObjectVertex::new([0, 0, 0], [0, 2]),
+                ObjectVertex::new([0, 0, 2], [0, 0]),
+                ObjectVertex::new([0, 1, 2], [1, 0]),
+                ObjectVertex::new([0, 1, 0], [1, 2]),
+                ObjectVertex::new([0, 0, 0], [0, 2]),
             ];
 
             let front=[
-                ObjectVertex::new([ 1,  1, 0], [1, 0]),
-                ObjectVertex::new([0,  1, 0], [0, 0]),
-                ObjectVertex::new([0,  1,  2], [0, 2]),
-                ObjectVertex::new([0,  1,  2], [0, 2]),
-                ObjectVertex::new([ 1,  1,  2], [1, 2]),
-                ObjectVertex::new([ 1,  1, 0], [1, 0]),
+                ObjectVertex::new([0,  1,  2], [0, 0]),
+                ObjectVertex::new([0,  1, 0], [0, 2]),
+                ObjectVertex::new([ 1,  1, 0], [1, 2]),
+                ObjectVertex::new([ 1,  1, 0], [1, 2]),
+                ObjectVertex::new([ 1,  1,  2], [1, 0]),
+                ObjectVertex::new([0,  1,  2], [0, 0]),
             ];
 
             let back=[
@@ -467,12 +467,13 @@ impl Process{
             ];
 
             let right=[
-                ObjectVertex::new([ 1, 0, -2], [0, 0]),
-                ObjectVertex::new([ 1,  1, -2], [1, 0]),
-                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
-                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
-                ObjectVertex::new([ 1, 0,  2-2], [0, 2]),
-                ObjectVertex::new([ 1, 0, 0-2], [0, 0]),
+                ObjectVertex::new([ 1,  1,  2-2], [1, 0]),
+                ObjectVertex::new([ 1,  1, -2], [1, 2]),
+                ObjectVertex::new([ 1, 0, -2], [0, 2]),
+
+                ObjectVertex::new([ 1, 0, 0-2], [0, 2]),
+                ObjectVertex::new([ 1, 0,  2-2], [0, 0]),
+                ObjectVertex::new([ 1,  1,  2-2], [1, 0]),
             ];
 
             let left=[
@@ -485,21 +486,21 @@ impl Process{
             ];
 
             let front=[
-                ObjectVertex::new([ 1,  1, 0-2], [1, 0]),
-                ObjectVertex::new([0,  1, 0-2], [0, 0]),
-                ObjectVertex::new([0,  1,  2-2], [0, 2]),
-                ObjectVertex::new([0,  1,  2-2], [0, 2]),
-                ObjectVertex::new([ 1,  1,  2-2], [1, 2]),
-                ObjectVertex::new([ 1,  1, 0-2], [1, 0]),
+                ObjectVertex::new([0,  1,  2-2], [1, 0]),
+                ObjectVertex::new([0,  1, 0-2], [1, 2]),
+                ObjectVertex::new([ 1,  1, 0-2], [0, 2]),
+                ObjectVertex::new([ 1,  1, 0-2], [0, 2]),
+                ObjectVertex::new([ 1,  1,  2-2], [0, 0]),
+                ObjectVertex::new([0,  1,  2-2], [1, 0]),
             ];
 
             let back=[
-                ObjectVertex::new([ 1, 0,  2-2], [0, 0]),
-                ObjectVertex::new([0, 0,  2-2], [1, 0]),
-                ObjectVertex::new([0, 0, 0-2], [1, 2]),
-                ObjectVertex::new([0, 0, 0-2], [1, 2]),
-                ObjectVertex::new([ 1, 0, 0-2], [0, 2]),
-                ObjectVertex::new([ 1, 0,  2-2], [0, 0]),
+                ObjectVertex::new([ 1, 0,  2-2], [1, 0]),
+                ObjectVertex::new([0, 0,  2-2], [0, 0]),
+                ObjectVertex::new([0, 0, 0-2], [0, 2]),
+                ObjectVertex::new([0, 0, 0-2], [0, 2]),
+                ObjectVertex::new([ 1, 0, 0-2], [1, 2]),
+                ObjectVertex::new([ 1, 0,  2-2], [1, 0]),
             ];
 
             buffer.extend_from_slice(&top);
@@ -536,6 +537,7 @@ impl Process{
     fn create_map(&mut self) -> Result<(),Error> {
         use std::io::{BufReader,BufRead};
         use std::fs::File;
+        use consts::MAP_SIZE;
 
         wait![self.process_receiver,
             ProcessCommand::ResourcesLoaded => ()
@@ -546,7 +548,7 @@ impl Process{
 
         let mut map=Map::new();
 
-        for (y,line_res) in reader.lines().enumerate() {
+        for (z,line_res) in reader.lines().enumerate() {
             let line=match line_res{
                 Ok(line) => line,
                 Err(_) => break
@@ -554,7 +556,7 @@ impl Process{
 
             let chars:Vec<char>=line.chars().collect();
 
-            for x in 0..16 {
+            for x in 0..MAP_SIZE {
                 let index=match chars[x*2+1] {
                     '0' => 0,
                     '1' => 1,
@@ -565,7 +567,7 @@ impl Process{
                 };
 
                 if index>4 {
-                    panic!("{} {}",x,y);
+                    panic!("{} {}",x,z);
                 }
 
                 let tile=match chars[x*2] {
@@ -575,19 +577,20 @@ impl Process{
                     _ => Tile::Air,
                 };
 
-                map.tiles[y+1][x+1]=tile;
+                map.tiles[x][z]=tile;
             }
         }
 
-        //self.map=Some(map);
         try_send![self.render_sender, RenderCommand::CreateMap];
 
-        for y in 0..16 {
-            for x in 0..16 {
+        for z in 0..MAP_SIZE {
+            for x in 0..MAP_SIZE {
                 thread::sleep_ms(10);
-                try_send![self.render_sender, RenderCommand::LoadTile(x+1,y+1,map.tiles[x+1][y+1]) ];
+                try_send![self.render_sender, RenderCommand::LoadTile(x,z,map.tiles[x][z]) ];
             }
         }
+
+        self.map=Some(map);
 
         ok!()
     }

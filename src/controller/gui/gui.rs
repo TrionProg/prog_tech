@@ -3,6 +3,7 @@ use glutin;
 
 use glutin::ElementState;
 use glutin::MouseButton;
+use glutin::VirtualKeyCode;
 
 use super::Input;
 
@@ -23,7 +24,11 @@ impl GUI {
         self.input.on_mouse_move(x, y);
     }
 
-    pub fn on_mouse_button(&mut self, state: ElementState, button: MouseButton) {
-        self.input.on_mouse_button(state, button);
+    pub fn on_mouse_button(&mut self, button: MouseButton, state: ElementState) {
+        self.input.on_mouse_button(button, state);
+    }
+
+    pub fn on_key(&mut self, key:VirtualKeyCode, state:ElementState){
+        self.input.on_key(key, state);
     }
 }

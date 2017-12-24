@@ -189,6 +189,8 @@ impl Controller{
                 println!("QUIT3");
                 return ok!();
             }
+
+            self.handle_cursor()?;
         }
     }
 
@@ -199,7 +201,6 @@ impl Controller{
         let events_loop=&mut self.events_loop;
         let gui=&mut self.gui;
         let camera=&self.camera;
-        let cursor=&mut self.cursor;
         let supervisor_sender=&mut self.supervisor_sender;
         let render_sender=&mut self.render_sender;
         let mut result=Ok(());
@@ -228,7 +229,7 @@ impl Controller{
                             }
                         },
                         WindowEvent::MouseInput{device_id, state, button} => {
-                            gui.on_mouse_button(state, button);
+                            gui.on_mouse_button(button, state);
 
                             if gui.input.right_mouse_button==ElementState::Pressed {
 
@@ -239,22 +240,8 @@ impl Controller{
                         },
                         WindowEvent::KeyboardInput {device_id, input} => {
                             match input.virtual_keycode {
-                                Some(VirtualKeyCode::Left) => {
-                                    cursor.move_left();
-                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
-                                },
-                                Some(VirtualKeyCode::Right) => {
-                                    cursor.move_right();
-                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
-                                },
-                                Some(VirtualKeyCode::Up) => {
-                                    cursor.move_up();
-                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
-                                },
-                                Some(VirtualKeyCode::Down) => {
-                                    cursor.move_down();
-                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
-                                },
+                                Some(key) =>
+                                    gui.on_key(key, input.state),
                                 _ => {},
                             }
                         },
@@ -271,6 +258,20 @@ impl Controller{
                 }
             }
         });
+
+        ok!()
+    }
+
+    fn handle_cursor(&mut self) -> Result<(),Error> {
+        let mut moved = false;
+        moved |= self.cursor.move_left(self.gui.input.key(VirtualKeyCode::Left));
+        moved |= self.cursor.move_right(self.gui.input.key(VirtualKeyCode::Right));
+        moved |= self.cursor.move_back(self.gui.input.key(VirtualKeyCode::Up));
+        moved |= self.cursor.move_front(self.gui.input.key(VirtualKeyCode::Down));
+
+        if moved {
+            try_send!(self.render_sender, RenderCommand::MoveCursor(self.cursor.x,self.cursor.z));
+        }
 
         ok!()
     }

@@ -37,8 +37,8 @@ impl InnerCamera{
         use cgmath::SquareMatrix;
 
         let mut camera=InnerCamera{
-            center_position: Pos3D::new(9.0,0.0,9.0),
-            angle: vec2(-3.14/4.0,3.14/4.0),
+            center_position: Pos3D::new(8.0,0.0,8.0),
+            angle: vec2(-3.14/4.0,3.14/8.0),
             distance: 10.0,
             camera_matrix:Matrix4::identity(),
             camera_position:Pos3D::new(0.0,0.0,0.0),

@@ -7,6 +7,7 @@ use nes::{ErrorInfo,ErrorInfoTrait};
 use reactor;
 
 use types::*;
+use consts::*;
 
 use gfx::Device;
 use glutin::GlContext;
@@ -269,9 +270,9 @@ impl Render{
                     self.set_slot(set_slot)?,
                 RenderCommand::CreateMap =>
                     self.map=Some(Map::new()),
-                RenderCommand::LoadTile(x,y,tile) => {
+                RenderCommand::LoadTile(x,z,tile) => {
                     match self.map {
-                        Some(ref mut map) => map.tiles[x][y]=tile,
+                        Some(ref mut map) => map.tiles[x][z]=tile,
                         None => {}
                     }
                 },
@@ -358,9 +359,9 @@ impl Render{
 
         match self.map {
             Some(ref map) => {
-                for y in 1..17 {
-                    for x in 1..17 {
-                        match map.tiles[x][y] {
+                for z in 0..MAP_SIZE {
+                    for x in 0..MAP_SIZE {
+                        match map.tiles[x][z] {
                             Tile::Air => {},
                             Tile::Floor(index) => {
                                 let mesh_id=self.slots.floor_mesh;
@@ -368,14 +369,14 @@ impl Render{
 
                                 self.storage.terrain_meshes.get(mesh_id)?.draw(
                                     &self.storage, &mut self.encoder, &self.targets,
-                                    x as u32,y as u32,texture_id
+                                    x as u32,z as u32,texture_id
                                 )?;
                             }
                             Tile::Wall(index) => {
-                                let r=if map.tiles[x+1][y].is_wall() {0}else{1<<0};
-                                let l=if map.tiles[x-1][y].is_wall() {0}else{1<<1};
-                                let f=if map.tiles[x][y+1].is_wall() {0}else{1<<2};
-                                let b=if map.tiles[x][y-1].is_wall() {0}else{1<<3};
+                                let r=if x<MAP_SIZE-1 && map.tiles[x+1][z].is_wall() {0}else{1<<0};
+                                let l=if x>0 && map.tiles[x-1][z].is_wall() {0}else{1<<1};
+                                let f=if z<MAP_SIZE-1 && map.tiles[x][z+1].is_wall() {0}else{1<<2};
+                                let b=if z>0 && map.tiles[x][z-1].is_wall() {0}else{1<<3};
 
                                 let mask=r | l | f | b;
 
@@ -384,14 +385,14 @@ impl Render{
 
                                 self.storage.terrain_meshes.get(mesh_id)?.draw(
                                     &self.storage, &mut self.encoder, &self.targets,
-                                    x as u32,y as u32,texture_id
+                                    x as u32,z as u32,texture_id
                                 )?;
                             },
                             Tile::Hole(index) => {
-                                let r=if map.tiles[x+1][y].is_hole() {0}else{1<<0};
-                                let l=if map.tiles[x-1][y].is_hole() {0}else{1<<1};
-                                let f=if map.tiles[x][y+1].is_hole() {0}else{1<<2};
-                                let b=if map.tiles[x][y-1].is_hole() {0}else{1<<3};
+                                let r=if x<MAP_SIZE-1 && map.tiles[x+1][z].is_hole() {0}else{1<<0};
+                                let l=if x>0 && map.tiles[x-1][z].is_hole() {0}else{1<<1};
+                                let f=if z<MAP_SIZE-1 && map.tiles[x][z+1].is_hole() {0}else{1<<2};
+                                let b=if z>0 && map.tiles[x][z-1].is_hole() {0}else{1<<3};
 
                                 let mask=r | l | f | b;
 
@@ -400,7 +401,7 @@ impl Render{
 
                                 self.storage.terrain_meshes.get(mesh_id)?.draw(
                                     &self.storage, &mut self.encoder, &self.targets,
-                                    x as u32,y as u32,texture_id
+                                    x as u32,z as u32,texture_id
                                 )?;
                             },
                         }
@@ -419,7 +420,7 @@ impl Render{
         let mesh_id=self.slots.tile;
         self.storage.object_meshes.get(mesh_id)?.draw(
             &self.storage, &mut self.encoder, &self.targets,
-            9,9
+            1,4
         )?;
 
         /*
