@@ -34,7 +34,9 @@ pub enum RenderCommand {
 
     ResourcesReady,
     CreateMap,
-    LoadTile(usize, usize, Tile)
+    LoadTile(usize, usize, Tile),
+
+    MoveCursor(u32,u32),
 }
 
 pub enum LoadTexture {

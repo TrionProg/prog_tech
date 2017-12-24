@@ -1,6 +1,7 @@
 use gfx;
 use nes::{ErrorInfo,ErrorInfoTrait};
 use gfx_gl;
+use render;
 
 use types::*;
 
@@ -8,7 +9,8 @@ use std::marker::PhantomData;
 
 use object_pool::growable::Pool;
 
-//use gfx::traits::FactoryExt;
+use gfx::traits::FactoryExt;
+use gfx_gl::Factory;
 
 use storage::{TextureID, MeshID, LodID};
 
@@ -37,7 +39,7 @@ pub trait LodStorage<ID:LodID,L:Lod,V> {
 }
 
 pub struct Storage {
-    pub gfx_factory: gfx_gl::Factory,
+    pub gfx_factory: Factory,
     pub object_pso: ObjectPSO,
     //pub fake_texture = u32;
 
@@ -46,11 +48,13 @@ pub struct Storage {
     pub object_meshes:InnerMeshStorage<ObjectMeshID,ObjectMesh>,
     pub terrain_meshes:InnerMeshStorage<TerrainMeshID,TerrainMesh>,
 
-    pub object_lods:InnerLodStorage<ObjectLodID,ObjectVertex,ObjectLod>
+    pub object_lods:InnerLodStorage<ObjectLodID,ObjectVertex,ObjectLod>,
+
+    pub object_globals: gfx::handle::Buffer<gfx_gl::Resources, render::pipelines::object::ObjectGlobals>,
 }
 
 impl Storage {
-    pub fn new(mut gfx_factory: gfx_gl::Factory) -> Result<Self,Error> {
+    pub fn new(mut gfx_factory: Factory) -> Result<Self,Error> {
         let object_pso=create_object_pso(&mut gfx_factory)?;
         //let fake_texture = load_texture_raw(&mut gfx_factory, Size2{w: 2, h: 2}, &[0; 4]);
 
@@ -64,6 +68,7 @@ impl Storage {
             terrain_meshes:InnerMeshStorage::new(),
 
             object_lods:InnerLodStorage::new(&gfx_factory),
+            object_globals:gfx_factory.create_constant_buffer(1),
         };
 
         ok!(storage)
@@ -71,13 +76,13 @@ impl Storage {
 }
 
 pub struct InnerTextureStorage<ID:TextureID,IB,T:Texture<IB=IB>> {
-    gfx_factory: gfx_gl::Factory,
+    gfx_factory: Factory,
     pool:Pool<T, T>,
     _phantom_data:PhantomData<(ID,IB)>
 }
 
 impl<ID:TextureID,IB,T:Texture<IB=IB>> InnerTextureStorage<ID,IB,T> {
-    fn new(gfx_factory: &gfx_gl::Factory) -> Self {
+    fn new(gfx_factory: &Factory) -> Self {
         InnerTextureStorage {
             gfx_factory:gfx_factory.clone(),
             pool:Pool::new(),
@@ -139,13 +144,13 @@ impl<ID:MeshID,M:Mesh> InnerMeshStorage<ID,M> {
 }
 
 pub struct InnerLodStorage<ID:LodID,V,L:Lod<V=V>> {
-    gfx_factory: gfx_gl::Factory,
+    gfx_factory: Factory,
     pool:Pool<L, L>,
     _phantom_data:PhantomData<(ID,V)>
 }
 
 impl<ID:LodID,V,L:Lod<V=V>> InnerLodStorage<ID,V,L> {
-    fn new(gfx_factory: &gfx_gl::Factory) -> Self {
+    fn new(gfx_factory: &Factory) -> Self {
         InnerLodStorage {
             gfx_factory:gfx_factory.clone(),
             pool:Pool::new(),

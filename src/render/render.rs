@@ -31,6 +31,7 @@ use ::Camera as CommonCamera;
 
 use super::Error;
 use super::Window;
+use super::Targets;
 use super::Storage;
 use super::Slots;
 use super::RenderCommand;
@@ -39,11 +40,7 @@ use super::{LoadTexture, LoadMesh, LoadLod, SetSlot};
 pub type RenderSender = reactor::Sender<ThreadSource,RenderCommand>;
 pub type RenderReceiver = reactor::Receiver<ThreadSource,RenderCommand>;
 
-pub type ColorFormat = gfx::format::Rgba8;
-pub type DepthFormat = gfx::format::DepthStencil;
-
-pub type RenderTarget = gfx::handle::RenderTargetView<gfx_gl::Resources, ColorFormat>;
-pub type DepthStencil = gfx::handle::DepthStencilView<gfx_gl::Resources, DepthFormat>;
+pub type Encoder = gfx::Encoder<gfx_gl::Resources, gfx_gl::CommandBuffer>;
 
 pub use process::{Map,Tile};
 
@@ -57,13 +54,12 @@ pub struct Render {
     process_sender:ProcessSender,
 
     window: Window,
-    render_target:RenderTarget,
-    depth_stencil:DepthStencil,
+    targets:Targets,
 
 
     //clear_color: [f32; 4],
     gfx_device: gfx_gl::Device,
-    encoder: gfx::Encoder<gfx_gl::Resources, gfx_gl::CommandBuffer>,
+    encoder: Encoder,
     //pub pso: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
     //pso_wire: gfx::PipelineState<gfx_gl::Resources, pipe::Meta>,
     storage: Storage,
@@ -71,11 +67,10 @@ pub struct Render {
     //font: rusttype::Font<'static>,
     //pub data: pipe::Data<gfx_gl::Resources>,
 
-    object_globals: gfx::handle::Buffer<gfx_gl::Resources, super::pipelines::object::ObjectGlobals>,
-
     resources_loaded:bool,
     camera:CommonCamera,
     map:Option<Map>,
+    cursor_pos:(u32,u32),
 }
 
 impl Render{
@@ -192,15 +187,24 @@ impl Render{
         let context = glutin::ContextBuilder::new()
             .with_vsync(true);
 
-        let (gfx_window, gfx_device,mut gfx_factory, render_target, depth_stencil) =
-            gfx_glutin::init::<ColorFormat, DepthFormat>(window_config, context, events_loop);
+        let (
+            gfx_window,
+            gfx_device,
+            mut gfx_factory,
+            final_color_target_view,
+            final_depth_target_view
+        ) = gfx_glutin::init::<super::targets::FinalColorFormat, super::targets::FinalDepthFormat>(window_config, context, events_loop);
 
         let window=Window::new(gfx_window, 1024, 768);
-        let mut encoder: gfx::Encoder<_, _> = gfx_factory.create_command_buffer().into();
 
-        use gfx::traits::FactoryExt;
-        let object_globals=gfx_factory.create_constant_buffer(1);
-        let mut storage=Storage::new(gfx_factory)?;
+        let targets=Targets {
+            final_color:final_color_target_view,
+            final_depth:final_depth_target_view
+        };
+
+        let storage=Storage::new(gfx_factory.clone())?;
+
+        let mut encoder: gfx::Encoder<_, _> = gfx_factory.create_command_buffer().into();
 
         let render=Render {
             render_receiver,
@@ -209,18 +213,17 @@ impl Render{
             process_sender,
 
             window,
-            render_target,
-            depth_stencil,
+            targets,
 
             gfx_device,
             encoder,
             storage,
             slots:Slots::new(),
-            object_globals,
 
             resources_loaded:false,
             camera,
-            map:None
+            map:None,
+            cursor_pos:(0,0),
         };
 
         ok!(render)
@@ -272,6 +275,8 @@ impl Render{
                         None => {}
                     }
                 },
+                RenderCommand::MoveCursor(x,z) =>
+                    self.cursor_pos=(x,z),
 
 
                 RenderCommand::ResourcesReady => {
@@ -286,8 +291,8 @@ impl Render{
 
     fn render(&mut self) -> Result<(),Error> {
         self.gfx_device.cleanup();
-        self.encoder.clear(&self.render_target, CLEAR_COLOR);
-        self.encoder.clear_depth(&self.depth_stencil, 1.0);
+        self.encoder.clear(&self.targets.final_color, CLEAR_COLOR);
+        self.encoder.clear_depth(&self.targets.final_depth, 1.0);
 
         if self.resources_loaded {
             self.render_map()?;
@@ -333,8 +338,8 @@ impl Render{
             final_matrix: final_matrix.into(),
             vbuf: lod.vertex_buffer.clone(),
             texture: (texture.view.clone(), sampler),
-            out: self.render_target.clone(),
-            out_depth: self.depth_stencil.clone()
+            out: self.color_target.clone(),
+            out_depth: self.depth_target.clone()
         };
 
         self.encoder.draw(&lod.slice, &self.storage.object_pso, &data);
@@ -345,7 +350,7 @@ impl Render{
         let proj_view_matrix=camera.perspective_matrix * camera.camera_matrix;
 
         self.encoder.update_constant_buffer(
-            &self.object_globals,
+            &self.storage.object_globals,
             &super::pipelines::object::ObjectGlobals {
                 proj_view_matrix: proj_view_matrix.into()
             },
@@ -359,27 +364,14 @@ impl Render{
                             Tile::Air => {},
                             Tile::Floor(index) => {
                                 let mesh_id=self.slots.floor_mesh;
-                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
-                                let lod=self.storage.object_lods.get(lod_id)?;
                                 let texture_id=self.slots.terrain_textures[index];
-                                let texture=self.storage.textures_rgba.get(texture_id)?;
 
-                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
-
-                                let data = super::pipelines::ObjectPipeline::Data {
-                                    globals: self.object_globals.clone(),
-                                    model_matrix: tile_matrix.into(),
-                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                                    vbuf: lod.vertex_buffer.clone(),
-
-                                    color_target: self.render_target.clone(),
-                                    depth_target: self.depth_stencil.clone()
-                                };
-
-                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                                self.storage.terrain_meshes.get(mesh_id)?.draw(
+                                    &self.storage, &mut self.encoder, &self.targets,
+                                    x as u32,y as u32,texture_id
+                                )?;
                             }
                             Tile::Wall(index) => {
-                                /*
                                 let r=if map.tiles[x+1][y].is_wall() {0}else{1<<0};
                                 let l=if map.tiles[x-1][y].is_wall() {0}else{1<<1};
                                 let f=if map.tiles[x][y+1].is_wall() {0}else{1<<2};
@@ -388,28 +380,14 @@ impl Render{
                                 let mask=r | l | f | b;
 
                                 let mesh_id=self.slots.wall_meshes[mask];
-                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
-                                let lod=self.storage.object_lods.get(lod_id)?;
                                 let texture_id=self.slots.terrain_textures[index];
-                                let texture=self.storage.textures_rgba.get(texture_id)?;
 
-                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
-
-                                let data = super::pipelines::ObjectPipeline::Data {
-                                    basic_color: [1.0, 1.0, 1.0, 1.0],
-                                    final_matrix: final_matrix.into(),
-                                    tile_matrix: tile_matrix.into(),
-                                    vbuf: lod.vertex_buffer.clone(),
-                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                                    out: self.render_target.clone(),
-                                    out_depth: self.depth_stencil.clone()
-                                };
-
-                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
-                                */
+                                self.storage.terrain_meshes.get(mesh_id)?.draw(
+                                    &self.storage, &mut self.encoder, &self.targets,
+                                    x as u32,y as u32,texture_id
+                                )?;
                             },
                             Tile::Hole(index) => {
-                                /*
                                 let r=if map.tiles[x+1][y].is_hole() {0}else{1<<0};
                                 let l=if map.tiles[x-1][y].is_hole() {0}else{1<<1};
                                 let f=if map.tiles[x][y+1].is_hole() {0}else{1<<2};
@@ -418,25 +396,12 @@ impl Render{
                                 let mask=r | l | f | b;
 
                                 let mesh_id=self.slots.hole_meshes[mask];
-                                let lod_id=self.storage.terrain_meshes.get(mesh_id)?.lod;
-                                let lod=self.storage.object_lods.get(lod_id)?;
                                 let texture_id=self.slots.terrain_textures[index];
-                                let texture=self.storage.textures_rgba.get(texture_id)?;
 
-                                let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
-
-                                let data = super::pipelines::ObjectPipeline::Data {
-                                    basic_color: [1.0, 1.0, 1.0, 1.0],
-                                    final_matrix: final_matrix.into(),
-                                    tile_matrix: tile_matrix.into(),
-                                    vbuf: lod.vertex_buffer.clone(),
-                                    texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                                    out: self.render_target.clone(),
-                                    out_depth: self.depth_stencil.clone()
-                                };
-
-                                self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
-                                */
+                                self.storage.terrain_meshes.get(mesh_id)?.draw(
+                                    &self.storage, &mut self.encoder, &self.targets,
+                                    x as u32,y as u32,texture_id
+                                )?;
                             },
                         }
                     }
@@ -444,6 +409,19 @@ impl Render{
             },
             None => {},
         }
+
+        let mesh_id=self.slots.cursor;
+        self.storage.object_meshes.get(mesh_id)?.draw(
+            &self.storage, &mut self.encoder, &self.targets,
+            self.cursor_pos.0, self.cursor_pos.1,
+        )?;
+
+        let mesh_id=self.slots.tile;
+        self.storage.object_meshes.get(mesh_id)?.draw(
+            &self.storage, &mut self.encoder, &self.targets,
+            9,9
+        )?;
+
         /*
         {
             let mesh_id = self.slots.cursor;
@@ -460,8 +438,8 @@ impl Render{
                 tile_matrix: tile_matrix.into(),
                 vbuf: lod.vertex_buffer.clone(),
                 texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                out: self.render_target.clone(),
-                out_depth: self.depth_stencil.clone()
+                out: self.color_target.clone(),
+                out_depth: self.depth_target.clone()
             };
 
             self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
@@ -482,8 +460,8 @@ impl Render{
                 tile_matrix: tile_matrix.into(),
                 vbuf: lod.vertex_buffer.clone(),
                 texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                out: self.render_target.clone(),
-                out_depth: self.depth_stencil.clone()
+                out: self.color_target.clone(),
+                out_depth: self.depth_target.clone()
             };
 
             self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
@@ -494,7 +472,7 @@ impl Render{
     }
 
     fn resize_window(&mut self, width:u32, height:u32) -> Result<(),Error> {
-        self.window.resize(width, height, &mut self.render_target, &mut self.depth_stencil);
+        self.window.resize(width, height, &mut self.targets);
 
         ok!()
     }

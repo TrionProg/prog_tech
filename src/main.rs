@@ -15,6 +15,7 @@ extern crate glutin;
 extern crate image;
 
 pub mod types;
+pub mod consts;
 
 #[macro_use]
 pub mod macros;

@@ -8,6 +8,7 @@ use types::*;
 use glutin::EventsLoop;
 use glutin::WindowEvent;
 use glutin::ElementState;
+use glutin::VirtualKeyCode;
 
 use std::thread;
 use std::thread::JoinHandle;
@@ -29,6 +30,7 @@ use ::Camera;
 use super::Error;
 use super::ControllerCommand;
 use super::GUI;
+use super::Cursor;
 
 pub type ControllerSender = reactor::Sender<ThreadSource,ControllerCommand>;
 pub type ControllerReceiver = reactor::Receiver<ThreadSource,ControllerCommand>;
@@ -42,6 +44,7 @@ pub struct Controller {
     events_loop:EventsLoop,
     gui:GUI,
     camera:Camera,
+    cursor:Cursor
 }
 
 impl Controller{
@@ -162,6 +165,7 @@ impl Controller{
             events_loop,
             gui:GUI::new(),
             camera,
+            cursor:Cursor::new(),
         };
 
         ok!(controller)
@@ -195,6 +199,7 @@ impl Controller{
         let events_loop=&mut self.events_loop;
         let gui=&mut self.gui;
         let camera=&self.camera;
+        let cursor=&mut self.cursor;
         let supervisor_sender=&mut self.supervisor_sender;
         let render_sender=&mut self.render_sender;
         let mut result=Ok(());
@@ -231,6 +236,27 @@ impl Controller{
                         },
                         WindowEvent::MouseWheel {device_id, delta, phase} => {
                             camera.on_mouse_wheel(delta)?;
+                        },
+                        WindowEvent::KeyboardInput {device_id, input} => {
+                            match input.virtual_keycode {
+                                Some(VirtualKeyCode::Left) => {
+                                    cursor.move_left();
+                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
+                                },
+                                Some(VirtualKeyCode::Right) => {
+                                    cursor.move_right();
+                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
+                                },
+                                Some(VirtualKeyCode::Up) => {
+                                    cursor.move_up();
+                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
+                                },
+                                Some(VirtualKeyCode::Down) => {
+                                    cursor.move_down();
+                                    try_send!(render_sender, RenderCommand::MoveCursor(cursor.x,cursor.z));
+                                },
+                                _ => {},
+                            }
                         },
                         _ => {},
                     }
