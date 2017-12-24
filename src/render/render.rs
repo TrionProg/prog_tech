@@ -71,6 +71,8 @@ pub struct Render {
     //font: rusttype::Font<'static>,
     //pub data: pipe::Data<gfx_gl::Resources>,
 
+    object_globals: gfx::handle::Buffer<gfx_gl::Resources, super::pipelines::object::ObjectGlobals>,
+
     resources_loaded:bool,
     camera:CommonCamera,
     map:Option<Map>,
@@ -195,6 +197,9 @@ impl Render{
 
         let window=Window::new(gfx_window, 1024, 768);
         let mut encoder: gfx::Encoder<_, _> = gfx_factory.create_command_buffer().into();
+
+        use gfx::traits::FactoryExt;
+        let object_globals=gfx_factory.create_constant_buffer(1);
         let mut storage=Storage::new(gfx_factory)?;
 
         let render=Render {
@@ -211,6 +216,7 @@ impl Render{
             encoder,
             storage,
             slots:Slots::new(),
+            object_globals,
 
             resources_loaded:false,
             camera,
@@ -336,7 +342,14 @@ impl Render{
         */
 
         let camera=self.camera.get_render_camera()?.unwrap();
-        let final_matrix=camera.perspective_matrix * camera.camera_matrix;
+        let proj_view_matrix=camera.perspective_matrix * camera.camera_matrix;
+
+        self.encoder.update_constant_buffer(
+            &self.object_globals,
+            &super::pipelines::object::ObjectGlobals {
+                proj_view_matrix: proj_view_matrix.into()
+            },
+        );
 
         match self.map {
             Some(ref map) => {
@@ -354,18 +367,19 @@ impl Render{
                                 let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32 - 9.0,0.0, y as f32 - 9.0));
 
                                 let data = super::pipelines::ObjectPipeline::Data {
-                                    basic_color: [1.0, 1.0, 1.0, 1.0],
-                                    final_matrix: final_matrix.into(),
-                                    tile_matrix: tile_matrix.into(),
-                                    vbuf: lod.vertex_buffer.clone(),
+                                    globals: self.object_globals.clone(),
+                                    model_matrix: tile_matrix.into(),
                                     texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                                    out: self.render_target.clone(),
-                                    out_depth: self.depth_stencil.clone()
+                                    vbuf: lod.vertex_buffer.clone(),
+
+                                    color_target: self.render_target.clone(),
+                                    depth_target: self.depth_stencil.clone()
                                 };
 
                                 self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
                             }
                             Tile::Wall(index) => {
+                                /*
                                 let r=if map.tiles[x+1][y].is_wall() {0}else{1<<0};
                                 let l=if map.tiles[x-1][y].is_wall() {0}else{1<<1};
                                 let f=if map.tiles[x][y+1].is_wall() {0}else{1<<2};
@@ -392,8 +406,10 @@ impl Render{
                                 };
 
                                 self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                                */
                             },
                             Tile::Hole(index) => {
+                                /*
                                 let r=if map.tiles[x+1][y].is_hole() {0}else{1<<0};
                                 let l=if map.tiles[x-1][y].is_hole() {0}else{1<<1};
                                 let f=if map.tiles[x][y+1].is_hole() {0}else{1<<2};
@@ -420,6 +436,7 @@ impl Render{
                                 };
 
                                 self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+                                */
                             },
                         }
                     }
@@ -427,6 +444,51 @@ impl Render{
             },
             None => {},
         }
+        /*
+        {
+            let mesh_id = self.slots.cursor;
+            let lod_id = self.storage.object_meshes.get(mesh_id)?.lod;
+            let texture_id = self.storage.object_meshes.get(mesh_id)?.texture;
+            let lod = self.storage.object_lods.get(lod_id)?;
+            let texture = self.storage.textures_rgba.get(texture_id)?;
+
+            let tile_matrix = Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0));
+
+            let data = super::pipelines::ObjectPipeline::Data {
+                basic_color: [1.0, 1.0, 1.0, 1.0],
+                final_matrix: final_matrix.into(),
+                tile_matrix: tile_matrix.into(),
+                vbuf: lod.vertex_buffer.clone(),
+                texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+                out: self.render_target.clone(),
+                out_depth: self.depth_stencil.clone()
+            };
+
+            self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+        }
+
+        {
+            let mesh_id = self.slots.tile;
+            let lod_id = self.storage.object_meshes.get(mesh_id)?.lod;
+            let texture_id = self.storage.object_meshes.get(mesh_id)?.texture;
+            let lod = self.storage.object_lods.get(lod_id)?;
+            let texture = self.storage.textures_rgba.get(texture_id)?;
+
+            let tile_matrix = Matrix4::from_translation(Vector3::new(2.0, 0.0, 2.0));
+
+            let data = super::pipelines::ObjectPipeline::Data {
+                basic_color: [1.0, 1.0, 1.0, 1.0],
+                final_matrix: final_matrix.into(),
+                tile_matrix: tile_matrix.into(),
+                vbuf: lod.vertex_buffer.clone(),
+                texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
+                out: self.render_target.clone(),
+                out_depth: self.depth_stencil.clone()
+            };
+
+            self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
+        }
+        */
 
         ok!()
     }
@@ -468,6 +530,10 @@ impl Render{
 
     fn set_slot(&mut self, set_slot:SetSlot) -> Result<(),Error> {
         match set_slot {
+            SetSlot::Cursor(mesh_id) =>
+                self.slots.cursor=mesh_id,
+            SetSlot::Tile(mesh_id) =>
+                self.slots.tile=mesh_id,
             SetSlot::TerrainTexture(index, texture_id) =>
                 self.slots.terrain_textures[index]=texture_id,
             SetSlot::FloorMesh(mesh_id) =>

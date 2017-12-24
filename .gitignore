@@ -1,3 +1,5 @@
 /target/
 **/*.rs.bk
 /beispiel/
+linux_release
+windows_release

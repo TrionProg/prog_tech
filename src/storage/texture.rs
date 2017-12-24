@@ -13,6 +13,7 @@ use super::TextureStorage;
 
 pub trait TextureID {
     fn new(id:ID) -> Self;
+    fn zeroed() -> Self;
     fn get_id(&self) -> ID;
 }
 
@@ -54,6 +55,7 @@ pub struct RgbaTextureID(ID);
 
 impl TextureID for RgbaTextureID {
     fn new(id:ID) -> Self {RgbaTextureID(id)}
+    fn zeroed() -> Self {RgbaTextureID(ID::zeroed())}
     fn get_id(&self) -> ID {self.0}
 }
 

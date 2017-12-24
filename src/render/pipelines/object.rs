@@ -17,31 +17,27 @@ pub struct ObjectPSO {
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
+//view_matrix: [[f32; 4]; 4] = "u_view_matrix",
+//proj_matrix: [[f32; 4]; 4] = "u_proj_matrix",
+
 gfx_defines!{
-    /*
-    vertex ObjectVertex {
-        pos: [f32; 2] = "a_Pos",
-        color: [f32; 3] = "a_Color",
+    constant ObjectGlobals {
+        proj_view_matrix: [[f32; 4]; 4] = "u_proj_view_matrix",
     }
 
-    pipeline ObjectPipeline {
-        vbuf: gfx::VertexBuffer<ObjectVertex> = (),
-        out: gfx::RenderTarget<ColorFormat> = "Target0",
-    }
-    */
     vertex ObjectVertex {
         pos: [f32; 3] = "a_pos",
         uv: [f32; 2] = "a_uv",
     }
 
     pipeline ObjectPipeline {
-        basic_color: gfx::Global<[f32; 4]> = "u_basic_color",
-        final_matrix: gfx::Global<[[f32; 4]; 4]> = "u_final_matrix",
-        tile_matrix: gfx::Global<[[f32; 4]; 4]> = "u_tile_matrix",
+        globals: gfx::ConstantBuffer<ObjectGlobals> = "c_globals",
+        model_matrix: gfx::Global<[[f32; 4]; 4]> = "u_model_matrix",
+        texture: gfx::TextureSampler<[f32; 4]> = "t_texture",
         vbuf: gfx::VertexBuffer<ObjectVertex> = (),
-        texture: gfx::TextureSampler<[f32; 4]> = "t_tex",
-        out: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),
-        out_depth: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
+
+        color_target: gfx::BlendTarget<ColorFormat> = ("Target0", gfx::state::MASK_ALL, gfx::preset::blend::ALPHA),
+        depth_target: gfx::DepthTarget<DepthFormat> = gfx::preset::depth::LESS_EQUAL_WRITE,
     }
 }
 
@@ -59,8 +55,8 @@ pub fn create_object_pso(gfx_factory: &mut gfx_gl::Factory) -> Result<ObjectPSO,
     let primitive = gfx::Primitive::TriangleList;
 
     let shader=try!(gfx_factory.link_program(
-        include_bytes!("shaders/v.glsl"),
-        include_bytes!("shaders/f.glsl"),
+        include_bytes!("shaders/object_v.glsl"),
+        include_bytes!("shaders/object_f.glsl"),
     ), Error::CompileShaderError);
 
     let pso=match gfx_factory.create_pipeline_from_program( &shader, primitive, rasterizer, ObjectPipeline::new() ) {

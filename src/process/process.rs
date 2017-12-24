@@ -229,6 +229,8 @@ impl Process{
         use std::io::{Cursor};
         use image;
 
+        self.load_cursor()?;
+        self.load_tile()?;
         self.load_textures()?;
         self.load_floor()?;
         self.load_walls()?;
@@ -236,6 +238,78 @@ impl Process{
 
 
         try_send![self.render_sender, RenderCommand::ResourcesReady];
+
+        ok!()
+    }
+
+    fn load_cursor(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::{MeshStorage, LodStorage};
+        use storage::RgbaTexture;
+        use storage::TextureStorage;
+
+        use render::storage::ObjectMesh;
+        use render::storage::ObjectVertex;
+
+        let mut buffer=Vec::with_capacity(1*6);
+
+        let top=[
+            ObjectVertex{ pos:[-1.0, 0.1, -1.0], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[ 1.0, 0.1, -1.0], uv:[1.0, 0.0]},
+            ObjectVertex{ pos:[ 1.0, 0.1,  1.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[ 1.0, 0.1,  1.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[-1.0, 0.1,  1.0], uv:[0.0, 1.0]},
+            ObjectVertex{ pos:[-1.0, 0.1, -1.0], uv:[0.0, 0.0]},
+        ];
+
+        buffer.extend_from_slice(&top);
+
+        let texture_id=RgbaTexture::load("textures/cursor.png", &self.storage)?;
+        let lod_id=self.storage.load_lod(buffer).unwrap();
+
+        let mesh=ObjectMesh::new(
+            lod_id,texture_id
+        );
+
+        let mesh_id=self.storage.load_mesh(mesh)?;
+
+        try_send![self.render_sender, SetSlot::Cursor(mesh_id).into()];
+
+        ok!()
+    }
+
+    fn load_tile(&mut self) -> Result<(),Error> {
+        use render::SetSlot;
+        use storage::{MeshStorage, LodStorage};
+        use storage::RgbaTexture;
+        use storage::TextureStorage;
+
+        use render::storage::ObjectMesh;
+        use render::storage::ObjectVertex;
+
+        let mut buffer=Vec::with_capacity(1*6);
+
+        let top=[
+            ObjectVertex{ pos:[0.2, 0.1, 0.2], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[0.8, 0.1, 0.2], uv:[1.0, 0.0]},
+            ObjectVertex{ pos:[0.8, 0.1, 0.8], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.8, 0.1, 0.8], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.2, 0.1, 0.8], uv:[0.0, 1.0]},
+            ObjectVertex{ pos:[0.2, 0.1, 0.2], uv:[0.0, 0.0]},
+        ];
+
+        buffer.extend_from_slice(&top);
+
+        let texture_id=RgbaTexture::load("textures/tile.png", &self.storage)?;
+        let lod_id=self.storage.load_lod(buffer).unwrap();
+
+        let mesh=ObjectMesh::new(
+            lod_id,texture_id
+        );
+
+        let mesh_id=self.storage.load_mesh(mesh)?;
+
+        try_send![self.render_sender, SetSlot::Tile(mesh_id).into()];
 
         ok!()
     }

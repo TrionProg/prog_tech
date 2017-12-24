@@ -69,6 +69,8 @@ impl Into<RenderCommand> for LoadLod {
 }
 
 pub enum SetSlot {
+    Cursor(ObjectMeshID),
+    Tile(ObjectMeshID),
     TerrainTexture(usize, RgbaTextureID),
     FloorMesh(TerrainMeshID),
     WallMesh(usize,TerrainMeshID),
