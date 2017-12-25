@@ -37,6 +37,8 @@ pub enum RenderCommand {
     LoadTile(usize, usize, Tile),
 
     MoveCursor(u32,u32),
+    SetCursorA(Option<(u32,u32)>),
+    SetCursorB(Option<(u32,u32)>),
 }
 
 pub enum LoadTexture {
@@ -72,6 +74,8 @@ impl Into<RenderCommand> for LoadLod {
 
 pub enum SetSlot {
     Cursor(ObjectMeshID),
+    CursorA(ObjectMeshID),
+    CursorB(ObjectMeshID),
     Tile(ObjectMeshID),
     TerrainTexture(usize, RgbaTextureID),
     FloorMesh(TerrainMeshID),

@@ -1,13 +1,21 @@
+use nes::{ErrorInfo,ErrorInfoTrait};
 
 use consts::MAP_SIZE;
 
 use glutin::ElementState;
 
+use render::{RenderSender,RenderCommand};
+use process::{ProcessSender,ProcessCommand};
+use super::Error;
+
 pub struct Cursor {
+    render_sender:RenderSender,
+    process_sender:ProcessSender,
+
     pub x:u32,
     pub z:u32,
-    pub pos1:Option<(u32,u32)>,
-    pub pos2:Option<(u32,u32)>,
+    pub a:Option<(u32,u32)>,
+    pub b:Option<(u32,u32)>,
 
     left_prescaler:u32,
     right_prescaler:u32,
@@ -16,12 +24,15 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new() -> Self {
+    pub fn new(render_sender:RenderSender, process_sender:ProcessSender) -> Self {
         Cursor {
+            render_sender,
+            process_sender,
+
             x:0,
             z:0,
-            pos1:None,
-            pos2:None,
+            a:None,
+            b:None,
 
             left_prescaler:0,
             right_prescaler:0,
@@ -124,5 +135,32 @@ impl Cursor {
                 false
             }
         }
+    }
+
+    pub fn on_enter(&mut self) -> Result<(),Error> {
+        if self.a.is_none() {
+            self.a=Some((self.x,self.z));
+            try_send!(self.render_sender, RenderCommand::SetCursorA( self.a ));
+            return ok!();
+        }
+
+        if self.b.is_none() {
+            self.b=Some((self.x,self.z));
+            try_send!(self.render_sender, RenderCommand::SetCursorB( self.b ));
+
+            try_send!(self.process_sender, ProcessCommand::Algorithm( self.a.unwrap(), self.b.unwrap() ));
+        }
+
+        ok!()
+    }
+
+    pub fn algorithm_end(&mut self) -> Result<(),Error> {
+        //self.a=None;
+        self.b=None;
+
+        //try_send!(self.render_sender, RenderCommand::SetCursorA( self.a ));
+        try_send!(self.render_sender, RenderCommand::SetCursorB( self.b ));
+
+        ok!()
     }
 }

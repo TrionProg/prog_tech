@@ -72,6 +72,8 @@ pub struct Render {
     camera:CommonCamera,
     map:Option<Map>,
     cursor_pos:(u32,u32),
+    cursor_a:Option<(u32,u32)>,
+    cursor_b:Option<(u32,u32)>,
 }
 
 impl Render{
@@ -225,6 +227,8 @@ impl Render{
             camera,
             map:None,
             cursor_pos:(0,0),
+            cursor_a:None,
+            cursor_b:None,
         };
 
         ok!(render)
@@ -267,7 +271,7 @@ impl Render{
                 RenderCommand::LoadLod(load_lod) =>
                     self.load_lod(load_lod)?,
                 RenderCommand::SetSlot(set_slot) =>
-                    self.set_slot(set_slot)?,
+                    self.slots.set_slot(set_slot),
                 RenderCommand::CreateMap =>
                     self.map=Some(Map::new()),
                 RenderCommand::LoadTile(x,z,tile) => {
@@ -276,8 +280,13 @@ impl Render{
                         None => {}
                     }
                 },
+
                 RenderCommand::MoveCursor(x,z) =>
                     self.cursor_pos=(x,z),
+                RenderCommand::SetCursorA(cursor_a) =>
+                    self.cursor_a=cursor_a,
+                RenderCommand::SetCursorB(cursor_b) =>
+                    self.cursor_b=cursor_b,
 
 
                 RenderCommand::ResourcesReady => {
@@ -308,44 +317,12 @@ impl Render{
     }
 
     fn render_map(&mut self) -> Result<(),Error> {
-        use cgmath::Matrix4;
-        use cgmath::Vector3;
-        use storage::mesh::MeshID;
-        use gfx::traits::FactoryExt;
-        use gfx::Factory;
-        use object_pool::growable::ID;
-        use cgmath::SquareMatrix;
-        use gfx::texture::SamplerInfo;
-
-        /*
-
-        let (lod_id,texture_id)={
-            let mesh=self.storage.object_meshes.get(ObjectMeshID::new(ID::new(0)))?;
-            (mesh.lod, mesh.texture)
-        };
-
-        let texture=self.storage.textures_rgba.get(texture_id)?;
-        let lod=self.storage.object_lods.get(lod_id)?;
-
-        let camera=self.camera.get_render_camera()?.unwrap();
-
-        let final_matrix=camera.perspective_matrix * camera.camera_matrix;
-
-
-        let sampler = self.storage.gfx_factory.create_sampler_linear();
-
-        let data = super::pipelines::ObjectPipeline::Data {
-            basic_color: [1.0, 1.0, 1.0, 1.0],
-            final_matrix: final_matrix.into(),
-            vbuf: lod.vertex_buffer.clone(),
-            texture: (texture.view.clone(), sampler),
-            out: self.color_target.clone(),
-            out_depth: self.depth_target.clone()
-        };
-
-        self.encoder.draw(&lod.slice, &self.storage.object_pso, &data);
-
-        */
+        //use storage::mesh::MeshID;
+        //use gfx::traits::FactoryExt;
+        //use gfx::Factory;
+        //use object_pool::growable::ID;
+        //use cgmath::SquareMatrix;
+        //use gfx::texture::SamplerInfo;
 
         let camera=self.camera.get_render_camera()?.unwrap();
         let proj_view_matrix=camera.perspective_matrix * camera.camera_matrix;
@@ -411,63 +388,39 @@ impl Render{
             None => {},
         }
 
-        let mesh_id=self.slots.cursor;
-        self.storage.object_meshes.get(mesh_id)?.draw(
-            &self.storage, &mut self.encoder, &self.targets,
-            self.cursor_pos.0, self.cursor_pos.1,
-        )?;
+        match self.cursor_a {
+            Some((x,z)) => {
+                let mesh_id=self.slots.cursor_a;
+                self.storage.object_meshes.get(mesh_id)?.draw(
+                    &self.storage, &mut self.encoder, &self.targets,
+                    x, 0.05, z,
+                )?;
+            },
+            None => {},
+        }
+
+        match self.cursor_b {
+            Some((x,z)) => {
+                let mesh_id=self.slots.cursor_b;
+                self.storage.object_meshes.get(mesh_id)?.draw(
+                    &self.storage, &mut self.encoder, &self.targets,
+                    x, 0.05, z,
+                )?;
+            },
+            None => {},
+        }
 
         let mesh_id=self.slots.tile;
         self.storage.object_meshes.get(mesh_id)?.draw(
             &self.storage, &mut self.encoder, &self.targets,
-            1,4
+            1, 0.05,4
         )?;
 
-        /*
-        {
-            let mesh_id = self.slots.cursor;
-            let lod_id = self.storage.object_meshes.get(mesh_id)?.lod;
-            let texture_id = self.storage.object_meshes.get(mesh_id)?.texture;
-            let lod = self.storage.object_lods.get(lod_id)?;
-            let texture = self.storage.textures_rgba.get(texture_id)?;
-
-            let tile_matrix = Matrix4::from_translation(Vector3::new(0.0, 0.0, 0.0));
-
-            let data = super::pipelines::ObjectPipeline::Data {
-                basic_color: [1.0, 1.0, 1.0, 1.0],
-                final_matrix: final_matrix.into(),
-                tile_matrix: tile_matrix.into(),
-                vbuf: lod.vertex_buffer.clone(),
-                texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                out: self.color_target.clone(),
-                out_depth: self.depth_target.clone()
-            };
-
-            self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
-        }
-
-        {
-            let mesh_id = self.slots.tile;
-            let lod_id = self.storage.object_meshes.get(mesh_id)?.lod;
-            let texture_id = self.storage.object_meshes.get(mesh_id)?.texture;
-            let lod = self.storage.object_lods.get(lod_id)?;
-            let texture = self.storage.textures_rgba.get(texture_id)?;
-
-            let tile_matrix = Matrix4::from_translation(Vector3::new(2.0, 0.0, 2.0));
-
-            let data = super::pipelines::ObjectPipeline::Data {
-                basic_color: [1.0, 1.0, 1.0, 1.0],
-                final_matrix: final_matrix.into(),
-                tile_matrix: tile_matrix.into(),
-                vbuf: lod.vertex_buffer.clone(),
-                texture: (texture.view.clone(), self.storage.object_pso.sampler.clone()),
-                out: self.color_target.clone(),
-                out_depth: self.depth_target.clone()
-            };
-
-            self.encoder.draw(&lod.slice, &self.storage.object_pso.pso, &data);
-        }
-        */
+        let mesh_id=self.slots.cursor;
+        self.storage.object_meshes.get(mesh_id)?.draw(
+            &self.storage, &mut self.encoder, &self.targets,
+            self.cursor_pos.0, 0.1,self.cursor_pos.1,
+        )?;
 
         ok!()
     }
@@ -505,25 +458,6 @@ impl Render{
             LoadLod::Object(vertex_buffer, lod_id) =>
                 self.storage.load_lod(vertex_buffer, lod_id)
         }
-    }
-
-    fn set_slot(&mut self, set_slot:SetSlot) -> Result<(),Error> {
-        match set_slot {
-            SetSlot::Cursor(mesh_id) =>
-                self.slots.cursor=mesh_id,
-            SetSlot::Tile(mesh_id) =>
-                self.slots.tile=mesh_id,
-            SetSlot::TerrainTexture(index, texture_id) =>
-                self.slots.terrain_textures[index]=texture_id,
-            SetSlot::FloorMesh(mesh_id) =>
-                self.slots.floor_mesh=mesh_id,
-            SetSlot::WallMesh(index, mesh_id) =>
-                self.slots.wall_meshes[index]=mesh_id,
-            SetSlot::HoleMesh(index, mesh_id) =>
-                self.slots.hole_meshes[index]=mesh_id,
-        }
-
-        ok!()
     }
 
     fn synchronize_finish(&mut self) -> Result<(),Error>{

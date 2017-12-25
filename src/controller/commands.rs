@@ -22,4 +22,5 @@ pub enum ControllerCommand {
 
     Tick,
     Shutdown,
+    AlgorithmEnd,
 }

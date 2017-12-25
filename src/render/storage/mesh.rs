@@ -35,13 +35,13 @@ impl ObjectMesh {
     }
 
     pub fn draw(&self, storage:&Storage, encoder:&mut Encoder, targets:&Targets,
-        x:u32, z:u32
+        x:u32, y:f32, z:u32
     ) -> Result<(),Error> {
         let lod_id=self.lod;
         let lod=storage.object_lods.get(lod_id)?;
         let texture=storage.textures_rgba.get(self.texture)?;
 
-        let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32,0.0, z as f32));
+        let tile_matrix=Matrix4::from_translation(Vector3::new(x as f32,y, z as f32));
 
         let data = render::pipelines::ObjectPipeline::Data {
             globals: storage.object_globals.clone(),

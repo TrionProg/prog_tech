@@ -30,6 +30,14 @@ use super::Tile;
 pub type ProcessSender = reactor::Sender<ThreadSource,ProcessCommand>;
 pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
 
+#[derive(Debug, Copy, Clone)]
+enum Direction {
+    Left,
+    Right,
+    Back,
+    Front
+}
+
 pub struct Process {
     process_receiver:ProcessReceiver,
     supervisor_sender:SupervisorSender,
@@ -182,6 +190,9 @@ impl Process{
                 ProcessCommand::ThreadCrash(thread) => return err!(Error::ThreadCrash, thread),
                 ProcessCommand::Tick => return ok!(false),
                 ProcessCommand::Shutdown => return ok!(true),
+
+                ProcessCommand::Algorithm(a,b) =>
+                    self.algorithm(a,b)?,
                 _ => unreachable!()
             }
         }
@@ -254,18 +265,19 @@ impl Process{
         let mut buffer=Vec::with_capacity(1*6);
 
         let top=[
-            ObjectVertex{ pos:[0.0, 0.1, 0.0], uv:[0.0, 0.0]},
-            ObjectVertex{ pos:[2.0, 0.1, 0.0], uv:[1.0, 0.0]},
-            ObjectVertex{ pos:[2.0, 0.1, 2.0], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[2.0, 0.1, 2.0], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[0.0, 0.1, 2.0], uv:[0.0, 1.0]},
-            ObjectVertex{ pos:[0.0, 0.1, 0.0], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[0.0, 0.0, 0.0], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[2.0, 0.0, 0.0], uv:[1.0, 0.0]},
+            ObjectVertex{ pos:[2.0, 0.0, 2.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[2.0, 0.0, 2.0], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.0, 0.0, 2.0], uv:[0.0, 1.0]},
+            ObjectVertex{ pos:[0.0, 0.0, 0.0], uv:[0.0, 0.0]},
         ];
 
         buffer.extend_from_slice(&top);
-
-        let texture_id=RgbaTexture::load("textures/cursor.png", &self.storage)?;
         let lod_id=self.storage.load_lod(buffer).unwrap();
+
+        //Cursor
+        let texture_id=RgbaTexture::load("textures/cursor.png", &self.storage)?;
 
         let mesh=ObjectMesh::new(
             lod_id,texture_id
@@ -275,6 +287,27 @@ impl Process{
 
         try_send![self.render_sender, SetSlot::Cursor(mesh_id).into()];
 
+        //CursorA
+        let texture_id=RgbaTexture::load("textures/cursor_a.png", &self.storage)?;
+
+        let mesh=ObjectMesh::new(
+            lod_id,texture_id
+        );
+
+        let mesh_id=self.storage.load_mesh(mesh)?;
+
+        try_send![self.render_sender, SetSlot::CursorA(mesh_id).into()];
+
+        //CursorB
+        let texture_id=RgbaTexture::load("textures/cursor_b.png", &self.storage)?;
+
+        let mesh=ObjectMesh::new(
+            lod_id,texture_id
+        );
+
+        let mesh_id=self.storage.load_mesh(mesh)?;
+
+        try_send![self.render_sender, SetSlot::CursorB(mesh_id).into()];
         ok!()
     }
 
@@ -290,12 +323,12 @@ impl Process{
         let mut buffer=Vec::with_capacity(1*6);
 
         let top=[
-            ObjectVertex{ pos:[0.2, 0.1, 0.2], uv:[0.0, 0.0]},
-            ObjectVertex{ pos:[0.8, 0.1, 0.2], uv:[1.0, 0.0]},
-            ObjectVertex{ pos:[0.8, 0.1, 0.8], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[0.8, 0.1, 0.8], uv:[1.0, 1.0]},
-            ObjectVertex{ pos:[0.2, 0.1, 0.8], uv:[0.0, 1.0]},
-            ObjectVertex{ pos:[0.2, 0.1, 0.2], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[0.2, 0.0, 0.2], uv:[0.0, 0.0]},
+            ObjectVertex{ pos:[0.8, 0.0, 0.2], uv:[1.0, 0.0]},
+            ObjectVertex{ pos:[0.8, 0.0, 0.8], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.8, 0.0, 0.8], uv:[1.0, 1.0]},
+            ObjectVertex{ pos:[0.2, 0.0, 0.8], uv:[0.0, 1.0]},
+            ObjectVertex{ pos:[0.2, 0.0, 0.2], uv:[0.0, 0.0]},
         ];
 
         buffer.extend_from_slice(&top);
@@ -591,6 +624,64 @@ impl Process{
         }
 
         self.map=Some(map);
+
+        ok!()
+    }
+
+    fn algorithm(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
+        self.algorithm_trace_line(a,b)?;
+
+        ok!()
+    }
+
+    fn algorithm_trace_line(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
+        use std::f32::consts::PI;
+
+        let ax=a.0 as f32 + 1.0;
+        let az=a.1 as f32 + 1.0;
+        let bx=b.0 as f32 + 1.0;
+        let bz=b.1 as f32 + 1.0;
+        let len=((bx-ax).powi(2) + (bz-az).powi(2)).sqrt();
+
+        let sin=if a.0==b.0 {
+            None
+        }else{
+            Some((bx-ax)/len)
+        };
+
+        let (dir,angle)=match sin {
+            None => {
+                if az<bz {
+                    (Direction::Front,0.0)
+                }else{
+                    (Direction::Back,PI)
+                }
+            },
+            Some(sin) => {
+                let asin=sin.asin();
+                let angle=if az <= bz {
+                    asin
+                }else if asin>0.0 {
+                    PI-asin
+                }else{
+                    -PI-asin
+                };
+
+                if angle >= -PI/4.0 && angle <= PI/4.0 {
+                    (Direction::Front,angle)
+                }else if angle >= PI-PI/4.0 || angle <= -PI+PI/4.0 {
+                    (Direction::Back,angle)
+                }else if angle > PI/4.0 && angle < PI-PI/4.0 {
+                    (Direction::Right,angle)
+                }else{
+                    (Direction::Left,angle)
+                }
+            }
+        };
+
+        println!("Direction {:?}", dir);
+
+        try_send!(self.controller_sender, ControllerCommand::AlgorithmEnd);
 
         ok!()
     }

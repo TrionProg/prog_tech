@@ -156,6 +156,8 @@ impl Controller{
         events_loop:EventsLoop,
         camera:Camera,
     ) -> Result<Self,Error> {
+        let cursor=Cursor::new(render_sender.clone(),process_sender.clone());
+
         let controller=Controller {
             controller_receiver,
             supervisor_sender,
@@ -165,7 +167,7 @@ impl Controller{
             events_loop,
             gui:GUI::new(),
             camera,
-            cursor:Cursor::new(),
+            cursor
         };
 
         ok!(controller)
@@ -200,6 +202,7 @@ impl Controller{
 
         let events_loop=&mut self.events_loop;
         let gui=&mut self.gui;
+        let cursor=&mut self.cursor;
         let camera=&self.camera;
         let supervisor_sender=&mut self.supervisor_sender;
         let render_sender=&mut self.render_sender;
@@ -240,8 +243,13 @@ impl Controller{
                         },
                         WindowEvent::KeyboardInput {device_id, input} => {
                             match input.virtual_keycode {
-                                Some(key) =>
-                                    gui.on_key(key, input.state),
+                                Some(key) => {
+                                    gui.on_key(key, input.state);
+
+                                    if key==VirtualKeyCode::Return && input.state==ElementState::Released {
+                                        cursor.on_enter()?;
+                                    }
+                                }
                                 _ => {},
                             }
                         },
@@ -282,6 +290,9 @@ impl Controller{
                 ControllerCommand::ThreadCrash(thread) => return err!(Error::ThreadCrash, thread),
                 ControllerCommand::Tick => return ok!(false),
                 ControllerCommand::Shutdown => return ok!(true),
+
+                ControllerCommand::AlgorithmEnd =>
+                    self.cursor.algorithm_end()?,
                 _ => unreachable!()
             }
         }
