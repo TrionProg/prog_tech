@@ -4,6 +4,7 @@ use nes::{ErrorInfo,ErrorInfoTrait};
 use reactor;
 
 use types::*;
+use consts::*;
 
 use std::thread;
 use std::thread::JoinHandle;
@@ -35,6 +36,7 @@ const RED:[f32;4] = [0.7,0.0,0.0,0.7];
 const BLUE:[f32;4] = [0.0,0.0,0.7,0.7];
 const GREEN:[f32;4] = [0.0,0.7,0.0,0.7];
 const AQUA:[f32;4] = [0.0,0.7,0.7,0.7];
+const YELLOW:[f32;4] = [0.7,0.7,0.0,0.7];
 
 #[derive(Debug, Copy, Clone)]
 enum Direction {
@@ -639,12 +641,55 @@ impl Process{
     }
 
     fn algorithm(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
-        self.algorithm_trace_line(a,b)?;
+        let trace_id=self.add_trace(a,b)?;
+        self.algorithm_trace_line(a,b,trace_id)?;
 
         ok!()
     }
 
-    fn algorithm_trace_line(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
+    fn add_trace(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<TraceID,Error> {
+        use std::f32::consts::PI;
+
+        let ax=a.0 as f32 + 1.0;
+        let az=a.1 as f32 + 1.0;
+        let bx=b.0 as f32 + 1.0;
+        let bz=b.1 as f32 + 1.0;
+        let len=((bx-ax).powi(2) + (bz-az).powi(2)).sqrt();
+
+        let sin=if a.0==b.0 {
+            None
+        }else{
+            Some((bx-ax)/len)
+        };
+
+        let angle=match sin {
+            None => {
+                if az<bz {
+                    0.0
+                }else{
+                    PI
+                }
+            },
+            Some(sin) => {
+                let asin=sin.asin();
+                let angle=if az <= bz {
+                    asin
+                }else if asin>0.0 {
+                    PI-asin
+                }else{
+                    -PI-asin
+                };
+
+                angle
+            }
+        };
+
+        let trace_id=self.traces.insert(&self.storage, a.0+1, a.1+1, angle, len, YELLOW)?;
+
+        ok!(trace_id)
+    }
+
+    fn algorithm_trace_line(&mut self, a:(u32,u32), b:(u32,u32), trace_id:TraceID) -> Result<(),Error> {
         use std::f32::consts::PI;
 
         let ax=a.0 as f32 + 1.0;
@@ -689,7 +734,77 @@ impl Process{
             }
         };
 
-        self.traces.insert(&self.storage, a.0+1, a.1+1, angle, len, RED);
+        let map=match self.map {
+            Some(ref map) => map,
+            None => panic!("No map")
+        };
+
+        let k=match dir {
+            Direction::Front | Direction::Back => {
+                if a.0==b.0 {
+                    None
+                }else{
+                    let k=(bz-az)/(bx-ax);
+                    let b=az-k*ax;
+                    Some((k,b))
+                }
+            },
+            _ => {
+                if a.1==b.1 {
+                    None
+                }else{
+                    let k=(bx-ax)/(bz-az);
+                    let b=ax-k*az;
+                    Some((k,b))
+                }
+            }
+        };
+
+        let obstracle= {
+            let render_sender = &mut self.render_sender;
+
+            let mut find_obstracle = || {
+                let mut previous = (a.0, a.1);
+
+                match dir {
+                    Direction::Front => {
+                        for z in a.1..(b.1 + 1) {
+                            let x = match k {
+                                None => a.0 as u32,
+                                Some((k, b)) => {
+                                    let x = (z as f32 - b) / k;
+                                    x as u32
+                                }
+                            };
+
+                            let no_obstracle = map.is_floor(x, z + 1) && map.is_floor(x + 1, z + 1);
+
+                            if no_obstracle {
+                                previous = (x, z);
+                                try_send!(render_sender, RenderCommand::AddTile(x,z));
+                            } else {
+                                return ok!(Some(previous));
+                            }
+
+                            thread::sleep_ms(DELAY);
+                        }
+                    },
+                    _ => {},
+                }
+
+                ok!(None)
+            };
+
+            find_obstracle()?
+        };
+
+        match obstracle {
+            Some(pos) => {
+                try_send!(self.render_sender, RenderCommand::SetTraceColor(trace_id,RED));
+                println!("OBSTRACLE:{} {}",pos.0,pos.1)
+            },
+            None => {},
+        }
 
         println!("Direction {:?}", dir);
 

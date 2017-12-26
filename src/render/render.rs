@@ -76,6 +76,8 @@ pub struct Render {
     cursor_a:Option<(u32,u32)>,
     cursor_b:Option<(u32,u32)>,
     traces:TracePool,
+    tiles:Vec<(u32,u32)>,
+    cursor_tile:Option<(u32,u32)>,
 }
 
 impl Render{
@@ -232,6 +234,8 @@ impl Render{
             cursor_a:None,
             cursor_b:None,
             traces:TracePool::new(),
+            tiles:Vec::new(),
+            cursor_tile:None
         };
 
         ok!(render)
@@ -300,6 +304,16 @@ impl Render{
                     self.traces.insert(trace),
                 RenderCommand::DeleteTrace(trace_id) =>
                     self.traces.delete(trace_id),
+                RenderCommand::SetTraceColor(trace_id,color) =>
+                    self.traces.set_color(trace_id,color),
+                RenderCommand::AddTile(x,z) => {
+                    self.tiles.push((x,z));
+                    self.cursor_tile=Some((x,z));
+                },
+                RenderCommand::ClearTiles => {
+                    self.tiles.clear();
+                    self.cursor_tile=None;
+                },
 
                 _ => unreachable!()
             }
@@ -402,6 +416,7 @@ impl Render{
             None => {},
         }
 
+        //CursorA
         match self.cursor_a {
             Some((x,z)) => {
                 let mesh_id=self.slots.cursor_a;
@@ -413,6 +428,7 @@ impl Render{
             None => {},
         }
 
+        //CursorB
         match self.cursor_b {
             Some((x,z)) => {
                 let mesh_id=self.slots.cursor_b;
@@ -424,12 +440,28 @@ impl Render{
             None => {},
         }
 
-        let mesh_id=self.slots.tile;
-        self.storage.object_meshes.get(mesh_id)?.draw(
-            &self.storage, &mut self.encoder, &self.targets,
-            1, 0.05,4
-        )?;
+        //Tiles
+        for &(x,z) in self.tiles.iter() {
+            let mesh_id=self.slots.tile;
+            self.storage.object_meshes.get(mesh_id)?.draw(
+                &self.storage, &mut self.encoder, &self.targets,
+                x, 0.025,z
+            )?;
+        }
 
+        //CursorTile
+        match self.cursor_tile {
+            Some((x,z)) => {
+                let mesh_id=self.slots.cursor;
+                self.storage.object_meshes.get(mesh_id)?.draw(
+                    &self.storage, &mut self.encoder, &self.targets,
+                    x, 0.04, z,
+                )?;
+            },
+            None => {},
+        }
+
+        //Cursor
         let mesh_id=self.slots.cursor;
         self.storage.object_meshes.get(mesh_id)?.draw(
             &self.storage, &mut self.encoder, &self.targets,

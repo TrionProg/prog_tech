@@ -42,7 +42,10 @@ pub enum RenderCommand {
     SetCursorA(Option<(u32,u32)>),
     SetCursorB(Option<(u32,u32)>),
     CreateTrace(Trace),
-    DeleteTrace(TraceID)
+    DeleteTrace(TraceID),
+    SetTraceColor(TraceID,[f32;4]),
+    AddTile(u32,u32),
+    ClearTiles
 }
 
 pub enum LoadTexture {

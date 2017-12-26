@@ -54,6 +54,10 @@ impl TracePool {
         self.pool.remove(id.get_id());
     }
 
+    pub fn set_color(&mut self, id:TraceID, color:[f32;4]) {
+        self.pool.get_mut(id.get_id()).unwrap().color=color;
+    }
+
     pub fn draw(&self, storage:&Storage, encoder:&mut Encoder, targets:&Targets ) -> Result<(),Error> {
         for trace in self.pool.iter() {
             storage.trace_meshes.get(trace.mesh_id)?.draw(

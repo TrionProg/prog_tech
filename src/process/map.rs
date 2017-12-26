@@ -18,6 +18,10 @@ impl Map {
             tiles:[[Tile::Air;MAP_SIZE];MAP_SIZE]
         }
     }
+
+    pub fn is_floor(&self, x:u32, z:u32) -> bool {
+        self.tiles[x as usize][z as usize].is_floor()
+    }
 }
 
 impl Tile {
@@ -31,6 +35,13 @@ impl Tile {
     pub fn is_hole(&self) -> bool {
         match *self {
             Tile::Hole(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_floor(&self) -> bool {
+        match *self {
+            Tile::Floor(_) => true,
             _ => false,
         }
     }
