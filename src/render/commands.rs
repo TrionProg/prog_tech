@@ -5,9 +5,11 @@ use supervisor::SupervisorSender;
 use controller::ControllerSender;
 use process::ProcessSender;
 
-use render::storage::{ObjectMesh,TerrainMesh};
-use render::pipelines::ObjectVertex;
 use::Camera;
+
+use super::storage::{ObjectMesh,TerrainMesh, TraceMesh};
+use super::pipelines::{ObjectVertex, TraceVertex};
+use super::Trace;
 
 use process::Tile;
 
@@ -39,6 +41,8 @@ pub enum RenderCommand {
     MoveCursor(u32,u32),
     SetCursorA(Option<(u32,u32)>),
     SetCursorB(Option<(u32,u32)>),
+    CreateTrace(Trace),
+    DeleteTrace(TraceID)
 }
 
 pub enum LoadTexture {
@@ -54,6 +58,7 @@ impl Into<RenderCommand> for LoadTexture {
 pub enum LoadMesh {
     Object(ObjectMesh, ObjectMeshID),
     Terrain(TerrainMesh, TerrainMeshID),
+    Trace(TraceMesh, TraceMeshID),
 }
 
 impl Into<RenderCommand> for LoadMesh {
@@ -63,7 +68,8 @@ impl Into<RenderCommand> for LoadMesh {
 }
 
 pub enum LoadLod {
-    Object(Vec<ObjectVertex>, ObjectLodID)
+    Object(Vec<ObjectVertex>, ObjectLodID),
+    Trace(Vec<TraceVertex>, TraceLodID)
 }
 
 impl Into<RenderCommand> for LoadLod {

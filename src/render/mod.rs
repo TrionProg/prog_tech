@@ -32,3 +32,6 @@ pub mod slots;
 pub use self::slots::Slots;
 
 pub mod pipelines;
+
+pub mod trace;
+pub use self::trace::{Trace, TracePool};

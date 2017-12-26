@@ -13,8 +13,8 @@ use self::object_pool::growable::Pool;
 use render::RenderSender;
 use render::{RenderCommand, LoadTexture, LoadMesh, LoadLod};
 
-use render::storage::ObjectVertex;
-use render::storage::{ObjectMesh,TerrainMesh};
+use render::storage::{ObjectVertex,TraceVertex};
+use render::storage::{ObjectMesh,TerrainMesh,TraceMesh};
 
 use super::Error;
 use super::{TextureID, MeshID, LodID};
@@ -48,8 +48,10 @@ struct InnerStorage {
 
     object_meshes:InnerMeshStorage<ObjectMeshID>,
     terrain_meshes:InnerMeshStorage<TerrainMeshID>,
+    trace_meshes:InnerMeshStorage<TraceMeshID>,
 
-    object_lods:InnerLodStorage<ObjectLodID>
+    object_lods:InnerLodStorage<ObjectLodID>,
+    trace_lods:InnerLodStorage<TraceLodID>
 }
 
 impl InnerStorage {
@@ -61,8 +63,10 @@ impl InnerStorage {
 
             object_meshes:InnerMeshStorage::new(),
             terrain_meshes:InnerMeshStorage::new(),
+            trace_meshes:InnerMeshStorage::new(),
 
-            object_lods:InnerLodStorage::new()
+            object_lods:InnerLodStorage::new(),
+            trace_lods:InnerLodStorage::new()
         }
     }
 }
@@ -194,6 +198,24 @@ impl MeshStorage<TerrainMeshID, TerrainMesh> for Storage {
     }
 }
 
+impl MeshStorage<TraceMeshID, TraceMesh> for Storage {
+    fn load_mesh(&self, mesh:TraceMesh) -> Result<TraceMeshID, Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        let mesh_id=storage.trace_meshes.insert();
+
+        try_send!(storage.render_sender, LoadMesh::Trace(mesh, mesh_id.clone()).into());
+
+        ok!(mesh_id)
+    }
+
+    fn delete_mesh(&self, mesh_id:TraceMeshID) -> Result<(), Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        ok!()
+    }
+}
+
 impl LodStorage<ObjectLodID, ObjectVertex> for Storage {
     fn load_lod(&self, vertex_buffer:Vec<ObjectVertex>) -> Result<ObjectLodID, Error> {
         mutex_lock!(&self.inner => storage, Error);
@@ -206,6 +228,24 @@ impl LodStorage<ObjectLodID, ObjectVertex> for Storage {
     }
 
     fn delete_lod(&self, lod_id:ObjectLodID) -> Result<(), Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        ok!()
+    }
+}
+
+impl LodStorage<TraceLodID, TraceVertex> for Storage {
+    fn load_lod(&self, vertex_buffer:Vec<TraceVertex>) -> Result<TraceLodID, Error> {
+        mutex_lock!(&self.inner => storage, Error);
+
+        let lod_id=storage.trace_lods.insert();
+
+        try_send!(storage.render_sender, LoadLod::Trace(vertex_buffer, lod_id.clone()).into());
+
+        ok!(lod_id)
+    }
+
+    fn delete_lod(&self, lod_id:TraceLodID) -> Result<(), Error> {
         mutex_lock!(&self.inner => storage, Error);
 
         ok!()

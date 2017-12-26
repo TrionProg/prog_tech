@@ -13,3 +13,11 @@ impl LodID for ObjectLodID {
     fn new(id:ID) -> Self {ObjectLodID(id)}
     fn get_id(&self) -> ID {self.0}
 }
+
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub struct TraceLodID(ID);
+
+impl LodID for TraceLodID {
+    fn new(id:ID) -> Self {TraceLodID(id)}
+    fn get_id(&self) -> ID {self.0}
+}

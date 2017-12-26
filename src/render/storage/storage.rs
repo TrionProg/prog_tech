@@ -16,8 +16,10 @@ use storage::{TextureID, MeshID, LodID};
 
 use render::Error;
 use render::pipelines::{ObjectPSO, create_object_pso};
+use render::pipelines::{TracePSO, create_trace_pso};
 
 use super::ObjectVertex;
+use super::TraceVertex;
 
 use super::texture::*;
 use super::mesh::*;
@@ -41,34 +43,46 @@ pub trait LodStorage<ID:LodID,L:Lod,V> {
 pub struct Storage {
     pub gfx_factory: Factory,
     pub object_pso: ObjectPSO,
+    pub trace_pso: TracePSO,
     //pub fake_texture = u32;
 
     pub textures_rgba:InnerTextureStorage<RgbaTextureID, RgbaImage, RgbaTexture>,
 
     pub object_meshes:InnerMeshStorage<ObjectMeshID,ObjectMesh>,
     pub terrain_meshes:InnerMeshStorage<TerrainMeshID,TerrainMesh>,
+    pub trace_meshes:InnerMeshStorage<TraceMeshID,TraceMesh>,
 
     pub object_lods:InnerLodStorage<ObjectLodID,ObjectVertex,ObjectLod>,
+    pub trace_lods:InnerLodStorage<TraceLodID,TraceVertex,TraceLod>,
 
     pub object_globals: gfx::handle::Buffer<gfx_gl::Resources, render::pipelines::object::ObjectGlobals>,
+    pub trace_globals: gfx::handle::Buffer<gfx_gl::Resources, render::pipelines::trace::TraceGlobals>,
 }
 
 impl Storage {
     pub fn new(mut gfx_factory: Factory) -> Result<Self,Error> {
         let object_pso=create_object_pso(&mut gfx_factory)?;
+        let trace_pso=create_trace_pso(&mut gfx_factory)?;
         //let fake_texture = load_texture_raw(&mut gfx_factory, Size2{w: 2, h: 2}, &[0; 4]);
 
         let storage=Storage {
             gfx_factory:gfx_factory.clone(),
             object_pso,
+            trace_pso,
             //fake_texture
+
             textures_rgba:InnerTextureStorage::new(&gfx_factory),
 
             object_meshes:InnerMeshStorage::new(),
             terrain_meshes:InnerMeshStorage::new(),
+            trace_meshes:InnerMeshStorage::new(),
 
             object_lods:InnerLodStorage::new(&gfx_factory),
+            trace_lods:InnerLodStorage::new(&gfx_factory),
+
+
             object_globals:gfx_factory.create_constant_buffer(1),
+            trace_globals:gfx_factory.create_constant_buffer(1),
         };
 
         ok!(storage)
@@ -210,6 +224,16 @@ impl MeshStorage<TerrainMeshID, TerrainMesh> for Storage {
     }
 }
 
+impl MeshStorage<TraceMeshID, TraceMesh> for Storage {
+    fn load_mesh(&mut self, mesh:TraceMesh, mesh_id:TraceMeshID) -> Result<(),Error> {
+        self.trace_meshes.load(mesh, mesh_id)
+    }
+
+    fn delete_mesh(&mut self, mesh_id:TraceMeshID) -> Result<(),Error> {
+        self.trace_meshes.delete(mesh_id)
+    }
+}
+
 impl LodStorage<ObjectLodID, ObjectLod, ObjectVertex> for Storage {
     fn load_lod(&mut self, vertex_buffer:Vec<ObjectVertex>, lod_id:ObjectLodID) -> Result<(),Error> {
         self.object_lods.load(vertex_buffer, lod_id)
@@ -219,3 +243,14 @@ impl LodStorage<ObjectLodID, ObjectLod, ObjectVertex> for Storage {
         self.object_lods.delete(lod_id)
     }
 }
+
+impl LodStorage<TraceLodID, TraceLod, TraceVertex> for Storage {
+    fn load_lod(&mut self, vertex_buffer:Vec<TraceVertex>, lod_id:TraceLodID) -> Result<(),Error> {
+        self.trace_lods.load(vertex_buffer, lod_id)
+    }
+
+    fn delete_lod(&mut self, lod_id:TraceLodID) -> Result<(),Error> {
+        self.trace_lods.delete(lod_id)
+    }
+}
+

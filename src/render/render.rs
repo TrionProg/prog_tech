@@ -37,6 +37,7 @@ use super::Storage;
 use super::Slots;
 use super::RenderCommand;
 use super::{LoadTexture, LoadMesh, LoadLod, SetSlot};
+use super::{Trace,TracePool};
 
 pub type RenderSender = reactor::Sender<ThreadSource,RenderCommand>;
 pub type RenderReceiver = reactor::Receiver<ThreadSource,RenderCommand>;
@@ -74,6 +75,7 @@ pub struct Render {
     cursor_pos:(u32,u32),
     cursor_a:Option<(u32,u32)>,
     cursor_b:Option<(u32,u32)>,
+    traces:TracePool,
 }
 
 impl Render{
@@ -229,6 +231,7 @@ impl Render{
             cursor_pos:(0,0),
             cursor_a:None,
             cursor_b:None,
+            traces:TracePool::new(),
         };
 
         ok!(render)
@@ -293,6 +296,10 @@ impl Render{
                     self.resources_loaded=true;
                     try_send!(self.process_sender, ProcessCommand::ResourcesLoaded);
                 },
+                RenderCommand::CreateTrace(trace) =>
+                    self.traces.insert(trace),
+                RenderCommand::DeleteTrace(trace_id) =>
+                    self.traces.delete(trace_id),
 
                 _ => unreachable!()
             }
@@ -330,6 +337,13 @@ impl Render{
         self.encoder.update_constant_buffer(
             &self.storage.object_globals,
             &super::pipelines::object::ObjectGlobals {
+                proj_view_matrix: proj_view_matrix.into()
+            },
+        );
+
+        self.encoder.update_constant_buffer(
+            &self.storage.trace_globals,
+            &super::pipelines::trace::TraceGlobals {
                 proj_view_matrix: proj_view_matrix.into()
             },
         );
@@ -422,6 +436,8 @@ impl Render{
             self.cursor_pos.0, 0.1,self.cursor_pos.1,
         )?;
 
+        self.traces.draw(&self.storage, &mut self.encoder, &self.targets)?;
+
         ok!()
     }
 
@@ -447,7 +463,9 @@ impl Render{
             LoadMesh::Object(mesh, mesh_id) =>
                 self.storage.load_mesh(mesh, mesh_id),
             LoadMesh::Terrain(mesh, mesh_id) =>
-                self.storage.load_mesh(mesh, mesh_id)
+                self.storage.load_mesh(mesh, mesh_id),
+            LoadMesh::Trace(mesh, mesh_id) =>
+                self.storage.load_mesh(mesh, mesh_id),
         }
     }
 
@@ -456,7 +474,9 @@ impl Render{
 
         match load_lod {
             LoadLod::Object(vertex_buffer, lod_id) =>
-                self.storage.load_lod(vertex_buffer, lod_id)
+                self.storage.load_lod(vertex_buffer, lod_id),
+            LoadLod::Trace(vertex_buffer, lod_id) =>
+                self.storage.load_lod(vertex_buffer, lod_id),
         }
     }
 

@@ -26,9 +26,15 @@ use super::Error;
 use super::ProcessCommand;
 use super::Map;
 use super::Tile;
+use super::TracePool;
 
 pub type ProcessSender = reactor::Sender<ThreadSource,ProcessCommand>;
 pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
+
+const RED:[f32;4] = [0.7,0.0,0.0,0.7];
+const BLUE:[f32;4] = [0.0,0.0,0.7,0.7];
+const GREEN:[f32;4] = [0.0,0.7,0.0,0.7];
+const AQUA:[f32;4] = [0.0,0.7,0.7,0.7];
 
 #[derive(Debug, Copy, Clone)]
 enum Direction {
@@ -45,7 +51,8 @@ pub struct Process {
     controller_sender:ControllerSender,
 
     storage:Storage,
-    map:Option<Map>
+    map:Option<Map>,
+    traces:TracePool,
 }
 
 impl Process{
@@ -149,6 +156,8 @@ impl Process{
 
         storage:Storage
     ) -> Result<Self,Error> {
+        let traces=TracePool::new(render_sender.clone());
+
         let process=Process {
             process_receiver,
             supervisor_sender,
@@ -156,7 +165,8 @@ impl Process{
             controller_sender,
 
             storage,
-            map:None
+            map:None,
+            traces
         };
 
         ok!(process)
@@ -678,6 +688,8 @@ impl Process{
                 }
             }
         };
+
+        self.traces.insert(&self.storage, a.0+1, a.1+1, angle, len, RED);
 
         println!("Direction {:?}", dir);
 
