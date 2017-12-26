@@ -13,3 +13,5 @@ pub use self::map::{Map,Tile};
 
 pub mod trace;
 pub use self::trace::TracePool;
+
+pub mod algorithm;

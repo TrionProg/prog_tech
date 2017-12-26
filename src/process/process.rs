@@ -28,23 +28,10 @@ use super::ProcessCommand;
 use super::Map;
 use super::Tile;
 use super::TracePool;
+use super::algorithm::*;
 
 pub type ProcessSender = reactor::Sender<ThreadSource,ProcessCommand>;
 pub type ProcessReceiver = reactor::Receiver<ThreadSource,ProcessCommand>;
-
-const RED:[f32;4] = [0.7,0.0,0.0,0.7];
-const BLUE:[f32;4] = [0.0,0.0,0.7,0.7];
-const GREEN:[f32;4] = [0.0,0.7,0.0,0.7];
-const AQUA:[f32;4] = [0.0,0.7,0.7,0.7];
-const YELLOW:[f32;4] = [0.7,0.7,0.0,0.7];
-
-#[derive(Debug, Copy, Clone)]
-enum Direction {
-    Left,
-    Right,
-    Back,
-    Front
-}
 
 pub struct Process {
     process_receiver:ProcessReceiver,
@@ -641,12 +628,20 @@ impl Process{
     }
 
     fn algorithm(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
-        let trace_id=self.add_trace(a,b)?;
-        self.algorithm_trace_line(a,b,trace_id)?;
+        let map=match self.map {
+            Some(ref map) => map,
+            None => panic!("No map")
+        };
+
+
+        let trace_id=add_trace(&mut self.traces, &self.storage, a, b)?;
+
+        trace_line(&mut self.traces, &self.storage, &mut self.render_sender, map, a, b, trace_id)?;
+        try_send!(self.controller_sender, ControllerCommand::AlgorithmEnd);
 
         ok!()
     }
-
+/*
     fn add_trace(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<TraceID,Error> {
         use std::f32::consts::PI;
 
@@ -763,7 +758,7 @@ impl Process{
         let obstracle= {
             let render_sender = &mut self.render_sender;
 
-            let mut find_obstracle = || {
+            fn find_obstracle () {
                 let mut previous = (a.0, a.1);
 
                 match dir {
@@ -799,17 +794,171 @@ impl Process{
         };
 
         match obstracle {
-            Some(pos) => {
+            Some(obstracle_pos) => {
+                let mut hook=|mut prev:(u32,u32),render_sender:&mut RenderSender|{
+                    let mut cur=obstracle_pos;
+                    let mut max_dist=0.0;
+                    let mut max_pos=None;
+
+                    match dir {
+                        Direction::Front => {
+                            loop {
+                                let mut variants=[None,None,None,None];
+
+                                //front
+                                let pos=(cur.0,cur.1+1);
+                                variants[0]=if pos!=prev && pos.1 < (MAP_SIZE as u32 -1) && map.is_floor(pos.0, pos.1+1) && map.is_floor(pos.0 + 1, pos.1 + 1) {
+                                    let dist=((bz-az)*pos.0 as f32 - (bx-ax)*(pos.1) as f32 + bx*az - bz*ax).abs() / len;
+                                    Some((pos,dist))
+                                }else{
+                                    None
+                                };
+
+                                //right
+                                let pos=(cur.0+1,cur.1);
+                                variants[1]=if pos!=prev && pos.0 < (MAP_SIZE as u32 -1) && map.is_floor(pos.0+1, pos.1) && map.is_floor(pos.0 + 1, pos.1 + 1) {
+                                    let dist = ((bz - az) * pos.0 as f32 - (bx - ax) * pos.1 as f32 + bx * az - bz * ax).abs() / len;
+                                    Some((pos,dist))
+                                }else{
+                                    None
+                                };
+
+                                //left
+                                variants[2]=if cur.0>0 {
+                                    let pos=(cur.0-1,cur.1);
+
+                                    if pos!=prev && map.is_floor(pos.0, pos.1) && map.is_floor(pos.0, pos.1 + 1) {
+                                        let dist = ((bz - az) * pos.0 as f32 - (bx - ax) * pos.1 as f32 + bx * az - bz * ax).abs() / len;
+                                        Some((pos,dist))
+                                    }else{
+                                        None
+                                    }
+                                }else{
+                                    None
+                                };
+
+                                //back
+                                variants[3]=if cur.1>0 {
+                                    let pos=(cur.0,cur.1-1);
+
+                                    if pos!=prev && map.is_floor(pos.0, pos.1) && map.is_floor(pos.0 + 1, pos.1) {
+                                        let dist = ((bz - az) * pos.0 as f32 - (bx - ax) * pos.1 as f32 + bx * az - bz * ax).abs() / len;
+                                        Some((pos,dist))
+                                    }else{
+                                        None
+                                    }
+                                }else{
+                                    None
+                                };
+
+                                let (new_pos,new_dist) = {
+                                    let mut new_pos=None;
+                                    let mut min_dist=9000.0;
+
+                                    for variant in variants.iter() {
+                                        match *variant {
+                                            Some((pos,dist)) => {
+                                                if dist < min_dist {
+                                                    new_pos=Some(pos);
+                                                    min_dist=dist;
+                                                }
+                                            },
+                                            None => {},
+                                        }
+                                    }
+
+                                    (new_pos,min_dist)
+                                };
+
+                                match new_pos {
+                                    None => {
+                                        let tmp=cur;
+                                        cur=prev;
+                                        prev=cur;
+                                    },
+                                    Some(new_pos) => {
+                                        if new_dist>max_dist {
+                                            max_pos=Some(new_pos);
+                                        }
+
+                                        if new_dist<1.0 {
+                                            //TODO:совершила круг
+                                            break;
+                                        }
+
+                                        prev=cur;
+                                        cur=new_pos;
+
+                                        try_send!(render_sender, RenderCommand::AddTile(cur.0,cur.1));
+                                        thread::sleep_ms(DELAY);
+                                    }
+                                }
+                            }
+                        },
+                        _ => {}
+                    }
+
+                    ok!(max_pos)
+                };
+
                 try_send!(self.render_sender, RenderCommand::SetTraceColor(trace_id,RED));
-                println!("OBSTRACLE:{} {}",pos.0,pos.1)
+
+                let hooks_pos=match dir {
+                    Direction::Front => {
+                        (hook((obstracle_pos.0+1,obstracle_pos.1),&mut self.render_sender)?,hook((obstracle_pos.0-1,obstracle_pos.1),&mut self.render_sender)?)
+                    },
+                    Direction::Back => {
+                        (hook((obstracle_pos.0-1,obstracle_pos.1),&mut self.render_sender)?,hook((obstracle_pos.0+1,obstracle_pos.1),&mut self.render_sender)?)
+                    },
+                    _ => (None,None)
+                };
+
+                let left_traces=match hooks_pos.0 {
+                    Some(p) => {
+                        let a=a;
+                        let b=p;
+                        let c=b;
+
+                        Some(((a,b,self.add_trace(a,b)?),(b,c,self.add_trace(b,c)?)))
+                    },
+                    None => None
+                };
+
+                let right_traces=match hooks_pos.1 {
+                    Some(p) => {
+                        let a=a;
+                        let b=p;
+                        let c=b;
+
+                        Some(((a,b,self.add_trace(a,b)?),(b,c,self.add_trace(b,c)?)))
+                    },
+                    None => None
+                };
+
+                match left_traces {
+                    Some((t1,t2)) => {
+                        self.algorithm_trace_line(t1.0,t1.1,t1.2)?;
+                        self.algorithm_trace_line(t2.0,t2.1,t2.2)?;
+                    }
+                    None => {},
+                }
+
+                match right_traces {
+                    Some((t1,t2)) => {
+                        self.algorithm_trace_line(t1.0,t1.1,t1.2)?;
+                        self.algorithm_trace_line(t2.0,t2.1,t2.2)?;
+                    }
+                    None => {},
+                }
             },
-            None => {},
+            None => {
+                try_send!(self.render_sender, RenderCommand::SetTraceColor(trace_id,GREEN));
+            },
         }
 
-        println!("Direction {:?}", dir);
-
-        try_send!(self.controller_sender, ControllerCommand::AlgorithmEnd);
+        try_send!(self.render_sender, RenderCommand::ClearTiles);
 
         ok!()
     }
+    */
 }
