@@ -306,9 +306,11 @@ impl Render{
                     self.traces.delete(trace_id),
                 RenderCommand::SetTraceColor(trace_id,color) =>
                     self.traces.set_color(trace_id,color),
-                RenderCommand::AddTile(x,z) => {
+                RenderCommand::AddTile(x,z,mc) => {
                     self.tiles.push((x,z));
-                    self.cursor_tile=Some((x,z));
+                    if mc {
+                        self.cursor_tile = Some((x, z));
+                    }
                 },
                 RenderCommand::ClearTiles => {
                     self.tiles.clear();

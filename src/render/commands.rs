@@ -44,7 +44,7 @@ pub enum RenderCommand {
     CreateTrace(Trace),
     DeleteTrace(TraceID),
     SetTraceColor(TraceID,[f32;4]),
-    AddTile(u32,u32),
+    AddTile(u32,u32,bool),
     ClearTiles
 }
 

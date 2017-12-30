@@ -629,14 +629,14 @@ impl Process{
 
     fn algorithm(&mut self, a:(u32,u32), b:(u32,u32)) -> Result<(),Error> {
         let map=match self.map {
-            Some(ref map) => map,
+            Some(ref mut map) => map,
             None => panic!("No map")
         };
 
 
-        let trace_id=add_trace(&mut self.traces, &self.storage, a, b)?;
+        let trace_id=add_trace(&mut self.traces, &self.storage, Pos2D::new(a.0,a.1), Pos2D::new(b.0,a.0))?;
 
-        trace_line(&mut self.traces, &self.storage, &mut self.render_sender, map, a, b, trace_id)?;
+        trace_line(&mut self.traces, &self.storage, &mut self.render_sender, map, Pos2D::new(a.0,a.1), Pos2D::new(b.0,a.0), trace_id)?;
         try_send!(self.controller_sender, ControllerCommand::AlgorithmEnd);
 
         ok!()
