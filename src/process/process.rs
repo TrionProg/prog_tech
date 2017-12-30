@@ -634,9 +634,10 @@ impl Process{
         };
 
 
-        let trace_id=add_trace(&mut self.traces, &self.storage, Pos2D::new(a.0,a.1), Pos2D::new(b.0,a.0))?;
+        let trace_id=add_trace(&mut self.traces, &self.storage, Pos2D::new(a.0,a.1), Pos2D::new(b.0,b.1))?;
 
-        trace_line(&mut self.traces, &self.storage, &mut self.render_sender, map, Pos2D::new(a.0,a.1), Pos2D::new(b.0,a.0), trace_id)?;
+        trace_line(&mut self.traces, &self.storage, &mut self.render_sender, map,
+                   Pos2D::new(a.0,a.1), Pos2D::new(b.0,b.1), trace_id, HookMode::Unreachable)?;
         try_send!(self.controller_sender, ControllerCommand::AlgorithmEnd);
 
         ok!()
