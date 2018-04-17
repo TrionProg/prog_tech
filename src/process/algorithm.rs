@@ -142,6 +142,7 @@ fn find_obstracle(render_sender:&mut RenderSender, map:&mut Map, a:Pos2D, b:Pos2
                     }
                 };
 
+                println!("T {} {}",x,z);
                 let is_obstracle = !map.is_floor(x, z) || !map.is_floor(x + 1, z) || !map.is_floor(x, z + 1) || !map.is_floor(x + 1, z + 1);
 
                 if is_obstracle {
@@ -206,7 +207,7 @@ fn hook(render_sender:&mut RenderSender, map:&Map, obstracle_pos:Pos2D, obstracl
                 HookMode::MostRemote | HookMode::Unreachable=> {
                     let dist_a=(c.x as f32 - ax).powi(2) + (c.z as f32 - az).powi(2);
 
-                    if dist_a > max_dist_a {//Тоже не всегда работает (ах == bx)
+                    if dist_a > max_dist_a {//TODO:Тоже не всегда работает (ах == bx)
                         if dist_ab < max_dist_ab {
                             return ok!(Some(c))
                         }
